@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coinecta.Sync", "src\Coinec
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coinecta.Data", "src\Coinecta.Data\Coinecta.Data.csproj", "{80F71F1F-F527-43F3-8B90-87023BD0A874}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Coinecta.Tests", "src\Coinecta.Tests\Coinecta.Tests.csproj", "{1EB76959-0D22-4993-B4A8-7D05E6DE6FD1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -23,6 +25,10 @@ Global
 		{80F71F1F-F527-43F3-8B90-87023BD0A874}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{80F71F1F-F527-43F3-8B90-87023BD0A874}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{80F71F1F-F527-43F3-8B90-87023BD0A874}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1EB76959-0D22-4993-B4A8-7D05E6DE6FD1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1EB76959-0D22-4993-B4A8-7D05E6DE6FD1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1EB76959-0D22-4993-B4A8-7D05E6DE6FD1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1EB76959-0D22-4993-B4A8-7D05E6DE6FD1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -30,6 +36,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{CE876B86-A0C5-43D8-B008-EC58B1A01B0D} = {A8BE4409-29DF-4F91-896A-813A6E0A8FD5}
 		{80F71F1F-F527-43F3-8B90-87023BD0A874} = {A8BE4409-29DF-4F91-896A-813A6E0A8FD5}
+		{1EB76959-0D22-4993-B4A8-7D05E6DE6FD1} = {A8BE4409-29DF-4F91-896A-813A6E0A8FD5}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0B0C86A4-DDEE-4552-9961-15BC29501C88}
