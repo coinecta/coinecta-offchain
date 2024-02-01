@@ -6,5 +6,6 @@ public record TransactionOutput
     public uint Index { get; init; }
     public string Address { get; init; } = default!;
     public Value Amount { get; init; } = default!;
+    public Datum? Datum { get; init; }
     public ulong Slot { get; init; }
 }

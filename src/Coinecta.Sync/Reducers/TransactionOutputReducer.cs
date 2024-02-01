@@ -22,7 +22,8 @@ public class TransactionOutputReducer(
         {
             txBody.Outputs.ToList().ForEach(output =>
             {
-                _dbContext.TransactionOutputs.Add(MapTransactionOutput(txBody.Id.ToHex(), response.Block.Slot, output));
+                Console.WriteLine(Convert.ToHexString(output.Datum?.Data ?? []));
+                _dbContext.TransactionOutputs.Add(Utils.MapTransactionOutputEntity(txBody.Id.ToHex(), response.Block.Slot, output));
             });
         });
 
@@ -37,27 +38,5 @@ public class TransactionOutputReducer(
         var schema = configuration.GetConnectionString("CoinectaContextSchema");
         await _dbContext.Database.ExecuteSqlRawAsync($"DELETE FROM \"{schema}\".\"TransactionOutputs\" WHERE \"Slot\" > {rollbackSlot}");
         _dbContext.Dispose();
-    }
-
-    public static TransactionOutputEntity MapTransactionOutput(string TransactionId, ulong slot, TransactionOutput output)
-    {
-        return new TransactionOutputEntity
-        {
-            Id = TransactionId,
-            Address = output.Address.ToBech32(),
-            Slot = slot,
-            Index = Convert.ToUInt32(output.Index),
-            Amount = new ValueEntity
-            {
-                Coin = output.Amount.Coin,
-                MultiAsset = output.Amount.MultiAsset.ToDictionary(
-                    k => k.Key.ToHex(),
-                    v => v.Value.ToDictionary(
-                        k => k.Key.ToHex(),
-                        v => v.Value
-                    )
-                )
-            }
-        };
     }
 }

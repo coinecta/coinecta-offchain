@@ -1,12 +1,13 @@
 using PallasDotnet.Models;
 using TransactionOutputEntity = Coinecta.Data.Models.TransactionOutput;
 using ValueEntity = Coinecta.Data.Models.Value;
+using DatumEntity = Coinecta.Data.Models.Datum;
 
 namespace Coinecta;
 
 public static class Utils
 {
-    public static TransactionOutputEntity MapTransactionOutput(string TransactionId, ulong slot, TransactionOutput output)
+    public static TransactionOutputEntity MapTransactionOutputEntity(string TransactionId, ulong slot, TransactionOutput output)
     {
         return new TransactionOutputEntity
         {
@@ -14,6 +15,7 @@ public static class Utils
             Address = output.Address.ToBech32(),
             Slot = slot,
             Index = Convert.ToUInt32(output.Index),
+            Datum = output.Datum is null ? null : new DatumEntity((Data.Models.DatumType)output.Datum.Type, output.Datum.Data),
             Amount = new ValueEntity
             {
                 Coin = output.Amount.Coin,

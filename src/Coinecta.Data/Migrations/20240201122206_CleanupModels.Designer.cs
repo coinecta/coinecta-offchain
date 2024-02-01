@@ -3,6 +3,7 @@ using System.Text.Json;
 using Coinecta.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    partial class CoinectaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240201122206_CleanupModels")]
+    partial class CleanupModels
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -61,29 +64,6 @@ namespace Coinecta.Data.Migrations
 
             modelBuilder.Entity("Coinecta.Data.Models.TransactionOutput", b =>
                 {
-                    b.OwnsOne("Coinecta.Data.Models.Datum", "Datum", b1 =>
-                        {
-                            b1.Property<string>("TransactionOutputId")
-                                .HasColumnType("text");
-
-                            b1.Property<long>("TransactionOutputIndex")
-                                .HasColumnType("bigint");
-
-                            b1.Property<byte[]>("Data")
-                                .IsRequired()
-                                .HasColumnType("bytea");
-
-                            b1.Property<int>("Type")
-                                .HasColumnType("integer");
-
-                            b1.HasKey("TransactionOutputId", "TransactionOutputIndex");
-
-                            b1.ToTable("TransactionOutputs", "coinecta");
-
-                            b1.WithOwner()
-                                .HasForeignKey("TransactionOutputId", "TransactionOutputIndex");
-                        });
-
                     b.OwnsOne("Coinecta.Data.Models.Value", "Amount", b1 =>
                         {
                             b1.Property<string>("TransactionOutputId")
@@ -108,8 +88,6 @@ namespace Coinecta.Data.Migrations
 
                     b.Navigation("Amount")
                         .IsRequired();
-
-                    b.Navigation("Datum");
                 });
 #pragma warning restore 612, 618
         }

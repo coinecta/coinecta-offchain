@@ -9,7 +9,6 @@ public class CoinectaDbContext(DbContextOptions<CoinectaDbContext> options, ICon
     private readonly IConfiguration _configuration = configuration;
     public DbSet<Block> Blocks { get; set; }
     public DbSet<TransactionOutput> TransactionOutputs { get; set; }
-    public DbSet<TbcByAddress> TbcByAddress { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -17,8 +16,7 @@ public class CoinectaDbContext(DbContextOptions<CoinectaDbContext> options, ICon
         modelBuilder.Entity<Block>().HasKey(b => new { b.Id, b.Number, b.Slot });
         modelBuilder.Entity<TransactionOutput>().HasKey(item => new { item.Id, item.Index });
         modelBuilder.Entity<TransactionOutput>().OwnsOne(item => item.Amount);
-        modelBuilder.Entity<TbcByAddress>().HasKey(item => new { item.Address, item.Slot });
-        modelBuilder.Entity<TbcByAddress>().OwnsOne(item => item.Amount);
+        modelBuilder.Entity<TransactionOutput>().OwnsOne(item => item.Datum);
         base.OnModelCreating(modelBuilder);
     }
 }
