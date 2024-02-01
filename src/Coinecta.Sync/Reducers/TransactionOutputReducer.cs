@@ -22,7 +22,6 @@ public class TransactionOutputReducer(
         {
             txBody.Outputs.ToList().ForEach(output =>
             {
-                Console.WriteLine(Convert.ToHexString(output.Datum?.Data ?? []));
                 _dbContext.TransactionOutputs.Add(Utils.MapTransactionOutputEntity(txBody.Id.ToHex(), response.Block.Slot, output));
             });
         });
