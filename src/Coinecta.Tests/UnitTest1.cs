@@ -39,4 +39,18 @@ public class UnitTest1
         var stakePoolHex = Convert.ToHexString(CborConvertor.Serialize(stakePool)).ToLowerInvariant();
         Assert.Equal("d8799f9fd8799f1a000493e0d8799f051864ffffff581c8b05e87a51c1d4a0fa888d2bb14dbc25e8c343ea379a171b63aa84a044434e4354d8799f581c0c61f135f652bc17994a5411d0a256de478ea24dbc19759d2ba14f03ff00ff", stakePoolHex);
     }
+
+    [Fact]
+    public void RationalMathTest()
+    {
+        var a = new Rational(1, 2);
+        var b = new Rational(1, 2);
+        var c = a + b;
+        var d = a * b;
+
+        Assert.Equal(2ul, c.Numerator);
+        Assert.Equal(2ul, c.Denominator);
+        Assert.Equal(1ul, d.Numerator);
+        Assert.Equal(4ul, d.Denominator);
+    }
 }

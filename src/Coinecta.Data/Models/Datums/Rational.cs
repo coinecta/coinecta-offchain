@@ -5,7 +5,47 @@ namespace Coinecta.Data.Models.Datums;
 
 // 121_0([_ 5, 100_0])
 [CborSerialize(typeof(RationalCborConvert))]
-public record Rational(ulong Numerator, ulong Denominator);
+public record Rational(ulong Numerator, ulong Denominator)
+{
+    public static Rational operator +(Rational a, Rational b)
+    {
+        if (a.Denominator == b.Denominator)
+        {
+            return new Rational(a.Numerator + b.Numerator, a.Denominator);
+        }
+        else
+        {
+            checked
+            {
+                ulong newNumerator = a.Numerator * b.Denominator + b.Numerator * a.Denominator;
+                ulong newDenominator = a.Denominator * b.Denominator;
+                return new Rational(newNumerator, newDenominator);
+            }
+        }
+    }
+
+    public static Rational operator *(Rational a, Rational b)
+    {
+        checked
+        {
+            return new Rational(a.Numerator * b.Numerator, a.Denominator * b.Denominator);
+        }
+    }
+
+    public static ulong operator /(Rational a, Rational b)
+    {
+        if (b.Numerator == 0)
+        {
+            throw new DivideByZeroException("Denominator cannot be zero.");
+        }
+        return a.Numerator / b.Numerator; 
+    }
+
+    public ulong Floor()
+    {
+        return this / new Rational(1, 1);
+    }
+}
 
 public class RationalCborConvert : ICborConvertor<Rational>
 {

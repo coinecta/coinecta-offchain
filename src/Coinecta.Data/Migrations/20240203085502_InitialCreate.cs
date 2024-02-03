@@ -29,18 +29,25 @@ namespace Coinecta.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "TbcByAddress",
+                name: "StakePoolByAddresses",
                 schema: "coinecta",
                 columns: table => new
                 {
                     Address = table.Column<string>(type: "text", nullable: false),
+                    TxHash = table.Column<string>(type: "text", nullable: false),
+                    TxIndex = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
                     Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    SignatureJson = table.Column<JsonElement>(type: "jsonb", nullable: false),
+                    RewardSettingsJson = table.Column<JsonElement>(type: "jsonb", nullable: false),
+                    PolicyId = table.Column<string>(type: "text", nullable: false),
+                    AssetName = table.Column<string>(type: "text", nullable: false),
+                    Decimals = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
                     Amount_Coin = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
                     Amount_MultiAssetJson = table.Column<JsonElement>(type: "jsonb", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_TbcByAddress", x => new { x.Address, x.Slot });
+                    table.PrimaryKey("PK_StakePoolByAddresses", x => new { x.Address, x.Slot, x.TxHash, x.TxIndex });
                 });
 
             migrationBuilder.CreateTable(
@@ -53,6 +60,8 @@ namespace Coinecta.Data.Migrations
                     Address = table.Column<string>(type: "text", nullable: false),
                     Amount_Coin = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
                     Amount_MultiAssetJson = table.Column<JsonElement>(type: "jsonb", nullable: false),
+                    Datum_Type = table.Column<int>(type: "integer", nullable: true),
+                    Datum_Data = table.Column<byte[]>(type: "bytea", nullable: true),
                     Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false)
                 },
                 constraints: table =>
@@ -69,7 +78,7 @@ namespace Coinecta.Data.Migrations
                 schema: "coinecta");
 
             migrationBuilder.DropTable(
-                name: "TbcByAddress",
+                name: "StakePoolByAddresses",
                 schema: "coinecta");
 
             migrationBuilder.DropTable(

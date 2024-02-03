@@ -39,6 +39,42 @@ namespace Coinecta.Data.Migrations
                     b.ToTable("Blocks", "coinecta");
                 });
 
+            modelBuilder.Entity("Coinecta.Data.Models.Reducers.StakePoolByAddress", b =>
+                {
+                    b.Property<string>("Address")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Slot")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<string>("TxHash")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TxIndex")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<string>("AssetName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Decimals")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<string>("PolicyId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<JsonElement>("RewardSettingsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<JsonElement>("SignatureJson")
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Address", "Slot", "TxHash", "TxIndex");
+
+                    b.ToTable("StakePoolByAddresses", "coinecta");
+                });
+
             modelBuilder.Entity("Coinecta.Data.Models.TransactionOutput", b =>
                 {
                     b.Property<string>("Id")
@@ -57,6 +93,40 @@ namespace Coinecta.Data.Migrations
                     b.HasKey("Id", "Index");
 
                     b.ToTable("TransactionOutputs", "coinecta");
+                });
+
+            modelBuilder.Entity("Coinecta.Data.Models.Reducers.StakePoolByAddress", b =>
+                {
+                    b.OwnsOne("Coinecta.Data.Models.Value", "Amount", b1 =>
+                        {
+                            b1.Property<string>("StakePoolByAddressAddress")
+                                .HasColumnType("text");
+
+                            b1.Property<decimal>("StakePoolByAddressSlot")
+                                .HasColumnType("numeric(20,0)");
+
+                            b1.Property<string>("StakePoolByAddressTxHash")
+                                .HasColumnType("text");
+
+                            b1.Property<decimal>("StakePoolByAddressTxIndex")
+                                .HasColumnType("numeric(20,0)");
+
+                            b1.Property<decimal>("Coin")
+                                .HasColumnType("numeric(20,0)");
+
+                            b1.Property<JsonElement>("MultiAssetJson")
+                                .HasColumnType("jsonb");
+
+                            b1.HasKey("StakePoolByAddressAddress", "StakePoolByAddressSlot", "StakePoolByAddressTxHash", "StakePoolByAddressTxIndex");
+
+                            b1.ToTable("StakePoolByAddresses", "coinecta");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StakePoolByAddressAddress", "StakePoolByAddressSlot", "StakePoolByAddressTxHash", "StakePoolByAddressTxIndex");
+                        });
+
+                    b.Navigation("Amount")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Coinecta.Data.Models.TransactionOutput", b =>

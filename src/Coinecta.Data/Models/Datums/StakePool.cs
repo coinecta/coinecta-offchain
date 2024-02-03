@@ -60,7 +60,7 @@ public class StakePoolCborConvert : ICborConvertor<StakePool>
     public void Write(ref CborWriter writer, StakePool value)
     {
         writer.WriteTag((CborTag)121);
-        writer.WriteStartArray(null); // StakePool consists of 5 elements
+        writer.WriteStartArray(null); 
 
         // Write RewardSettings array
         writer.WriteStartArray(null);
