@@ -6,7 +6,7 @@ namespace Coinecta.Data.Models.Datums;
 
 // 121_0([_ 300000_2, 121_0([_ 5, 100_0])])
 [CborSerialize(typeof(RewardSettingCborConvert))]
-public record RewardSetting(ulong LockDuration, Rational RewardMultiplier);
+public record RewardSetting(ulong LockDuration, Rational RewardMultiplier) : IDatum;
 
 public class RewardSettingCborConvert : ICborConvertor<RewardSetting>
 {

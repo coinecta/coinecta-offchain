@@ -15,7 +15,7 @@ namespace Coinecta.Data.Models.Datums;
 ])
 */
 [CborSerialize(typeof(StakePoolCborConvert))]
-public record StakePool(Signature Signature, RewardSetting[] RewardSettings, byte[] PolicyId, byte[] AssetName, ulong Decimals);
+public record StakePool(Signature Owner, RewardSetting[] RewardSettings, byte[] PolicyId, byte[] AssetName, ulong Decimals) : IDatum;
 
 public class StakePoolCborConvert : ICborConvertor<StakePool>
 {
@@ -47,14 +47,14 @@ public class StakePoolCborConvert : ICborConvertor<StakePool>
         var assetName = reader.ReadByteString();
 
         // Read Signature
-        var signature = new SignatureCborConvert().Read(ref reader);
+        var owner = new SignatureCborConvert().Read(ref reader);
 
         // Read Decimals
         var decimals = reader.ReadUInt64();
 
         reader.ReadEndArray(); // End of StakePool
 
-        return new StakePool(signature, rewardSettings, policyId, assetName, decimals);
+        return new StakePool(owner, rewardSettings, policyId, assetName, decimals);
     }
 
     public void Write(ref CborWriter writer, StakePool value)
@@ -77,7 +77,7 @@ public class StakePoolCborConvert : ICborConvertor<StakePool>
         writer.WriteByteString(value.AssetName);
 
         // Write Signature
-        new SignatureCborConvert().Write(ref writer, value.Signature);
+        new SignatureCborConvert().Write(ref writer, value.Owner);
 
         // Write Decimals
         writer.WriteUInt64(value.Decimals);

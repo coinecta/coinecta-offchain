@@ -67,7 +67,7 @@ public class StakePoolByAddressReducer(
                 {
                     var address = new Address(output.Address.ToBech32());
                     var pkh = Convert.ToHexString(address.GetPublicKeyHash()).ToLowerInvariant();
-                    if (pkh == "d58d5d34810bfd0357ba816883dd8e9eca2d5e5db563b69f0a765f44")
+                    if (pkh == configuration["CoinectaStakeValidatorHash"])
                     {
                         if (output.Datum is not null && output.Datum.Type == PallasDotnet.Models.DatumType.InlineDatum)
                         {
@@ -84,7 +84,7 @@ public class StakePoolByAddressReducer(
                                     TxIndex = Convert.ToUInt32(output.Index),
                                     PolicyId = Convert.ToHexString(stakePoolDatum.PolicyId).ToLowerInvariant(),
                                     AssetName = Convert.ToHexString(stakePoolDatum.AssetName).ToLowerInvariant(),
-                                    Signature = stakePoolDatum.Signature,
+                                    Owner = stakePoolDatum.Owner,
                                     RewardSettings = [.. stakePoolDatum.RewardSettings],
                                     Decimals = stakePoolDatum.Decimals,
                                     Amount = entityUtxo.Amount

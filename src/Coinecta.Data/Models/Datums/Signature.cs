@@ -5,7 +5,7 @@ using CborSerialization;
 namespace Coinecta.Data.Models.Datums;
 
 [CborSerialize(typeof(SignatureCborConvert))]
-public record Signature(byte[] KeyHash);
+public record Signature(byte[] KeyHash) : IDatum;
 
 public class SignatureCborConvert : ICborConvertor<Signature>
 {

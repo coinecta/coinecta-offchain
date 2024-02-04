@@ -3,6 +3,7 @@ using System.Text.Json;
 using Coinecta.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    partial class CoinectaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240203234523_StakePoolSignatureToOwner")]
+    partial class StakePoolSignatureToOwner
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -60,14 +63,14 @@ namespace Coinecta.Data.Migrations
                     b.Property<decimal>("Decimals")
                         .HasColumnType("numeric(20,0)");
 
-                    b.Property<JsonElement>("OwnerJson")
-                        .HasColumnType("jsonb");
-
                     b.Property<string>("PolicyId")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<JsonElement>("RewardSettingsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<JsonElement>("SignatureJson")
                         .HasColumnType("jsonb");
 
                     b.HasKey("Address", "Slot", "TxHash", "TxIndex");

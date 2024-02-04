@@ -8,16 +8,16 @@ public record StakePoolByAddress
     public string Address { get; init; } = default!;
 
     [NotMapped]
-    public Signature Signature { get; set; } = default!;
+    public Signature Owner { get; set; } = default!;
 
     [NotMapped]
     public List<RewardSetting> RewardSettings { get; set; } = default!;
 
-    public JsonElement SignatureJson
+    public JsonElement OwnerJson
     {
         get
         {
-            var jsonString = JsonSerializer.Serialize(Signature);
+            var jsonString = JsonSerializer.Serialize(Owner);
             return JsonDocument.Parse(jsonString).RootElement;
         }
 
@@ -25,11 +25,11 @@ public record StakePoolByAddress
         {
             if (value.ValueKind == JsonValueKind.Undefined || value.ValueKind == JsonValueKind.Null)
             {
-                Signature = new Signature([]);
+                Owner = new Signature([]);
             }
             else
             {
-                Signature = JsonSerializer.Deserialize<Signature>(value.GetRawText()) ?? new Signature([]);
+                Owner = JsonSerializer.Deserialize<Signature>(value.GetRawText()) ?? new Signature([]);
             }
         }
     }

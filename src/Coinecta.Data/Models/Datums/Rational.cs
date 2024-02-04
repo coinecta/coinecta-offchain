@@ -5,7 +5,7 @@ namespace Coinecta.Data.Models.Datums;
 
 // 121_0([_ 5, 100_0])
 [CborSerialize(typeof(RationalCborConvert))]
-public record Rational(ulong Numerator, ulong Denominator)
+public record Rational(ulong Numerator, ulong Denominator) : IDatum
 {
     public static Rational operator +(Rational a, Rational b)
     {
@@ -38,7 +38,7 @@ public record Rational(ulong Numerator, ulong Denominator)
         {
             throw new DivideByZeroException("Denominator cannot be zero.");
         }
-        return a.Numerator / b.Numerator; 
+        return a.Numerator / b.Numerator;
     }
 
     public ulong Floor()
