@@ -21,12 +21,17 @@ public static class CborConverter
         return ((ICborConvertor<T>)convertor).Read(ref reader);
     }
 
-    private static object GetConvertor(Type type)
+    public static object GetConvertor(Type type)
     {
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(InlineDatum<>))
         {
             var innerType = type.GenericTypeArguments[0];
             return Activator.CreateInstance(typeof(InlineDatumCborConvert<>).MakeGenericType(innerType))!;
+        }
+        else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Destination<>))
+        {
+            var innerType = type.GenericTypeArguments[0];
+            return Activator.CreateInstance(typeof(DestinationCborConvert<>).MakeGenericType(innerType))!;
         }
         else if (type.GetCustomAttributes(typeof(CborSerialize), inherit: true).Length != 0)
         {

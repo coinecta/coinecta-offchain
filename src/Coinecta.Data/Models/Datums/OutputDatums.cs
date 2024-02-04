@@ -88,7 +88,7 @@ public class InlineDatumCborConvert<T> : ICborConvertor<InlineDatum<T>> where T 
         reader.ReadStartArray();
 
         // Directly use the converter for T, since we know the type at compile time
-        var datumConverter = CborConverterResolver.GetConverterFor<T>();
+        var datumConverter = (ICborConvertor<T>)CborConverter.GetConvertor(typeof(T));
         var datum = datumConverter.Read(ref reader);
 
         reader.ReadEndArray();
@@ -102,7 +102,7 @@ public class InlineDatumCborConvert<T> : ICborConvertor<InlineDatum<T>> where T 
         writer.WriteStartArray(null); // One item in the array, the datum
 
         // Directly use the converter for T
-        var datumConverter = CborConverterResolver.GetConverterFor<T>();
+        var datumConverter = (ICborConvertor<T>)CborConverter.GetConvertor(typeof(T));
         datumConverter.Write(ref writer, value.Datum);
 
         writer.WriteEndArray();
