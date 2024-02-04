@@ -26,13 +26,10 @@ public static class CborConverter
         if (type.IsGenericType)
         {
             var genericTypeDef = type.GetGenericTypeDefinition();
-            if (genericTypeDef.GetCustomAttributes(inherit: true).Where(a => a.GetType() == typeof(CborSerialize)).FirstOrDefault() is CborSerialize attribute)
+            if (genericTypeDef.GetCustomAttributes(inherit: true).FirstOrDefault(a => a.GetType() == typeof(CborSerialize)) is CborSerialize attribute)
             {
-                // Get the generic arguments from the class the attribute is attached to
-                var genericArgs = type.GetGenericArguments();
-
-                // Create the converter type by providing the generic arguments to the open generic converter type
-                var converterType = attribute.ConvertorType.MakeGenericType(genericArgs);
+                var genericArgs = type.GetGenericArguments(); // Handles any number of generic arguments
+                var converterType = attribute.ConvertorType.MakeGenericType(genericArgs); // Applies those arguments to the converter type
                 return Activator.CreateInstance(converterType)!;
             }
         }
