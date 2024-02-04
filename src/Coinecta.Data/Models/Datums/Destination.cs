@@ -4,6 +4,7 @@ using CborSerialization;
 
 namespace Coinecta.Data.Models.Datums;
 
+[CborSerialize(typeof(DestinationCborConvert<>))]
 public record Destination<T>(Address Address, T Datum) : IDatum;
 
 public class DestinationCborConvert<T> : ICborConvertor<Destination<T>> where T : IDatum

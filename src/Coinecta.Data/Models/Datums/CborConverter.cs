@@ -23,24 +23,26 @@ public static class CborConverter
 
     public static object GetConvertor(Type type)
     {
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(InlineDatum<>))
+        if (type.IsGenericType)
         {
-            var innerType = type.GenericTypeArguments[0];
-            return Activator.CreateInstance(typeof(InlineDatumCborConvert<>).MakeGenericType(innerType))!;
+            var genericTypeDef = type.GetGenericTypeDefinition();
+            if (genericTypeDef.GetCustomAttributes(inherit: true).Where(a => a.GetType() == typeof(CborSerialize)).FirstOrDefault() is CborSerialize attribute)
+            {
+                // Get the generic arguments from the class the attribute is attached to
+                var genericArgs = type.GetGenericArguments();
+
+                // Create the converter type by providing the generic arguments to the open generic converter type
+                var converterType = attribute.ConvertorType.MakeGenericType(genericArgs);
+                return Activator.CreateInstance(converterType)!;
+            }
         }
-        else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Destination<>))
+
+        // Fallback for non-generic types or types without the CborSerialize attribute
+        if (type.GetCustomAttributes(inherit: true).Where(a => a.GetType() == typeof(CborSerialize)).FirstOrDefault() is CborSerialize nonGenericAttribute)
         {
-            var innerType = type.GenericTypeArguments[0];
-            return Activator.CreateInstance(typeof(DestinationCborConvert<>).MakeGenericType(innerType))!;
+            return Activator.CreateInstance(nonGenericAttribute.ConvertorType)!;
         }
-        else if (type.GetCustomAttributes(typeof(CborSerialize), inherit: true).Length != 0)
-        {
-            var attribute = (CborSerialize)type.GetCustomAttributes(typeof(CborSerialize), inherit: true).First();
-            return Activator.CreateInstance(attribute.ConvertorType)!;
-        }
-        else
-        {
-            throw new CborException($"Type {type.Name} does not have a CborSerialize attribute.");
-        }
+
+        throw new CborException($"Type {type.Name} does not have a CborSerialize attribute.");
     }
 }

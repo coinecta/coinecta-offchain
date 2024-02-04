@@ -75,6 +75,7 @@ This is an example of InlineDatum with a Credential Datum inside it (in Cbor Dia
 ])
 */
 /* Special Type with a special serialization handling doesn't need CborSerialize for now untill we can come up of a better system*/
+[CborSerialize(typeof(InlineDatumCborConvert<>))]
 public record InlineDatum<T>(T Datum) : IDatum where T : IDatum;
 
 public class InlineDatumCborConvert<T> : ICborConvertor<InlineDatum<T>> where T : IDatum
