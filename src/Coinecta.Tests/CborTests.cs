@@ -113,4 +113,26 @@ public class CborTests
         var destinationCborHex = Convert.ToHexString(CborConverter.Serialize(destination)).ToLowerInvariant();
         Assert.Equal("d8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffffffd87b9fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffff", destinationCborHex);
     }
+
+    [Fact]
+    public void StakePoolProxyCborTest()
+    {
+        var stakePoolProxy = CborConverter.Deserialize<StakePoolProxy<NoDatum>>(
+            Convert.FromHexString(
+                "d8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffffffd87980ff1903e8d8799f011864ff581c8b05e87a51c1d4a0fa888d2bb14dbc25e8c343ea379a171b63aa84a044434e4354581c5496b3318f8ca933bbfdf19b8faa7f948d044208e0278d62c24ee73eff"
+            )
+        );
+
+        var stakePoolProxyCborHex = Convert.ToHexString(CborConverter.Serialize(stakePoolProxy)).ToLowerInvariant();
+        Assert.Equal("d8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffffffd87980ff1903e8d8799f011864ff581c8b05e87a51c1d4a0fa888d2bb14dbc25e8c343ea379a171b63aa84a044434e4354581c5496b3318f8ca933bbfdf19b8faa7f948d044208e0278d62c24ee73eff", stakePoolProxyCborHex);
+
+        var stakePoolProxyWithInlineDatumCredential = CborConverter.Deserialize<StakePoolProxy<InlineDatum<Credential>>>(
+            Convert.FromHexString(
+                "d8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffffffd87b9fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffff1903e8d8799f011864ff581c8b05e87a51c1d4a0fa888d2bb14dbc25e8c343ea379a171b63aa84a044434e4354581c5496b3318f8ca933bbfdf19b8faa7f948d044208e0278d62c24ee73eff"
+            )
+        );
+
+        var stakePoolProxyWithInlineDatumCredentialCborHex = Convert.ToHexString(CborConverter.Serialize(stakePoolProxyWithInlineDatumCredential)).ToLowerInvariant();
+        Assert.Equal("d8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffffffd87b9fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffff1903e8d8799f011864ff581c8b05e87a51c1d4a0fa888d2bb14dbc25e8c343ea379a171b63aa84a044434e4354581c5496b3318f8ca933bbfdf19b8faa7f948d044208e0278d62c24ee73eff", stakePoolProxyWithInlineDatumCredentialCborHex);
+    }
 }

@@ -26,7 +26,7 @@ public class NoDatumCborConvert : ICborConvertor<NoDatum>
     public void Write(ref CborWriter writer, NoDatum value)
     {
         writer.WriteTag((CborTag)121);
-        writer.WriteStartArray(null);
+        writer.WriteStartArray(0);
         writer.WriteEndArray();
     }
 }
