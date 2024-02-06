@@ -34,20 +34,35 @@ namespace Coinecta.Data.Migrations
                 columns: table => new
                 {
                     Address = table.Column<string>(type: "text", nullable: false),
+                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
                     TxHash = table.Column<string>(type: "text", nullable: false),
                     TxIndex = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
-                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
-                    SignatureJson = table.Column<JsonElement>(type: "jsonb", nullable: false),
-                    RewardSettingsJson = table.Column<JsonElement>(type: "jsonb", nullable: false),
-                    PolicyId = table.Column<string>(type: "text", nullable: false),
-                    AssetName = table.Column<string>(type: "text", nullable: false),
-                    Decimals = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
                     Amount_Coin = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
-                    Amount_MultiAssetJson = table.Column<JsonElement>(type: "jsonb", nullable: false)
+                    Amount_MultiAssetJson = table.Column<JsonElement>(type: "jsonb", nullable: false),
+                    StakePoolJson = table.Column<JsonElement>(type: "jsonb", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_StakePoolByAddresses", x => new { x.Address, x.Slot, x.TxHash, x.TxIndex });
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StakeRequestByAddresses",
+                schema: "coinecta",
+                columns: table => new
+                {
+                    Address = table.Column<string>(type: "text", nullable: false),
+                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    TxHash = table.Column<string>(type: "text", nullable: false),
+                    TxIndex = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    Amount_Coin = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    Amount_MultiAssetJson = table.Column<JsonElement>(type: "jsonb", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    StakePoolJson = table.Column<JsonElement>(type: "jsonb", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StakeRequestByAddresses", x => new { x.Address, x.Slot, x.TxHash, x.TxIndex });
                 });
 
             migrationBuilder.CreateTable(
@@ -79,6 +94,10 @@ namespace Coinecta.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "StakePoolByAddresses",
+                schema: "coinecta");
+
+            migrationBuilder.DropTable(
+                name: "StakeRequestByAddresses",
                 schema: "coinecta");
 
             migrationBuilder.DropTable(

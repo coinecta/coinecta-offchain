@@ -11,6 +11,7 @@ public class CoinectaDbContext(DbContextOptions<CoinectaDbContext> options, ICon
     public DbSet<Block> Blocks { get; set; }
     public DbSet<TransactionOutput> TransactionOutputs { get; set; }
     public DbSet<StakePoolByAddress> StakePoolByAddresses { get; set; }
+    public DbSet<StakeRequestByAddress> StakeRequestByAddresses { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -21,6 +22,8 @@ public class CoinectaDbContext(DbContextOptions<CoinectaDbContext> options, ICon
         modelBuilder.Entity<TransactionOutput>().OwnsOne(item => item.Datum);
         modelBuilder.Entity<StakePoolByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex });
         modelBuilder.Entity<StakePoolByAddress>().OwnsOne(item => item.Amount);
+        modelBuilder.Entity<StakeRequestByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex });
+        modelBuilder.Entity<StakeRequestByAddress>().OwnsOne(item => item.Amount);
         base.OnModelCreating(modelBuilder);
     }
 }

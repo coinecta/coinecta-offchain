@@ -6,60 +6,32 @@ namespace Coinecta.Data.Models.Reducers;
 public record StakePoolByAddress
 {
     public string Address { get; init; } = default!;
-
-    [NotMapped]
-    public Signature Owner { get; set; } = default!;
-
-    [NotMapped]
-    public List<RewardSetting> RewardSettings { get; set; } = default!;
-
-    public JsonElement OwnerJson
-    {
-        get
-        {
-            var jsonString = JsonSerializer.Serialize(Owner);
-            return JsonDocument.Parse(jsonString).RootElement;
-        }
-
-        set
-        {
-            if (value.ValueKind == JsonValueKind.Undefined || value.ValueKind == JsonValueKind.Null)
-            {
-                Owner = new Signature([]);
-            }
-            else
-            {
-                Owner = JsonSerializer.Deserialize<Signature>(value.GetRawText()) ?? new Signature([]);
-            }
-        }
-    }
-
-    public JsonElement RewardSettingsJson
-    {
-        get
-        {
-            var jsonString = JsonSerializer.Serialize(RewardSettings);
-            return JsonDocument.Parse(jsonString).RootElement;
-        }
-
-        set
-        {
-            if (value.ValueKind == JsonValueKind.Undefined || value.ValueKind == JsonValueKind.Null)
-            {
-                RewardSettings = [];
-            }
-            else
-            {
-                RewardSettings = JsonSerializer.Deserialize<List<RewardSetting>>(value.GetRawText()) ?? [];
-            }
-        }
-    }
-
-    public string PolicyId { get; init; } = default!;
-    public string AssetName { get; init; } = default!;
-    public ulong Decimals { get; init; }
+    public ulong Slot { get; init; }
     public string TxHash { get; init; } = default!;
     public ulong TxIndex { get; init; }
     public Value Amount { get; init; } = default!;
-    public ulong Slot { get; init; }
+    
+    [NotMapped]
+    public StakePool StakePool { get; set; } = default!;
+    
+    public JsonElement StakePoolJson
+    {
+        get
+        {
+            var jsonString = JsonSerializer.Serialize(StakePool);
+            return JsonDocument.Parse(jsonString).RootElement;
+        }
+
+        set
+        {
+            if (value.ValueKind == JsonValueKind.Undefined || value.ValueKind == JsonValueKind.Null)
+            {
+                throw new Exception("Invalid StakePoolJson");
+            }
+            else
+            {
+                StakePool = JsonSerializer.Deserialize<StakePool>(value.GetRawText()) ?? throw new Exception("Invalid StakePoolJson");
+            }
+        }
+    }
 }

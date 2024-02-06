@@ -30,6 +30,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<IBlockReducer, BlockReducer>();
 builder.Services.AddSingleton<ICoreReducer, TransactionOutputReducer>();
 builder.Services.AddSingleton<IReducer, StakePoolByAddressReducer>();
+builder.Services.AddSingleton<IReducer, StakeRequestByAddressReducer>();
 
 builder.Services.AddHostedService<CardanoIndexWorker>();
 
