@@ -15,7 +15,6 @@ public class StakeRequestByAddressReducer(
     ILogger<StakeRequestByAddressReducer> logger
 ) : IReducer
 {
-
     private CoinectaDbContext _dbContext = default!;
     private readonly ILogger<StakeRequestByAddressReducer> _logger = logger;
 
@@ -40,18 +39,58 @@ public class StakeRequestByAddressReducer(
 
     private async Task ProcessInputAync(NextResponse response)
     {
-        // Collect input id and index concatenated by # seperator
-        var inputIds = response.Block.TransactionBodies.SelectMany(txBody => txBody.Inputs.Select(input => input.Id.ToHex()+"#" +input.Index)).ToList();
+        // Collect input id and index as tuples
+        var inputTuples = response.Block.TransactionBodies
+            .SelectMany(txBody => txBody.Inputs.Select(input => (Id: input.Id.ToHex(), input.Index)))
+            .ToList();
 
-        // Find all stake requests by address that have input id and index
-        var stakeRequestsByAddress = await _dbContext.StakeRequestByAddresses.Where(s => inputIds.Contains(
-            s.TxHash + "#" + s.TxIndex
-        )).ToListAsync();
+        // Define the base query
+        var query = _dbContext.StakeRequestByAddresses.AsQueryable();
 
-        // Update status of stake requests to cancelled
-        foreach (var stakeRequestByAddress in stakeRequestsByAddress)
+        // Build the query dynamically with OR conditions
+        IQueryable<StakeRequestByAddress>? combinedQuery = null;
+        foreach (var tuple in inputTuples)
         {
-            stakeRequestByAddress.Status = StakeRequestStatus.Cancelled;
+            var currentQuery = query.Where(s => s.TxHash == tuple.Id && s.TxIndex == tuple.Index);
+            combinedQuery = combinedQuery == null ? currentQuery : combinedQuery.Union(currentQuery);
+        }
+
+        // Execute the query if there are conditions
+        List<StakeRequestByAddress> stakeRequestsByAddress = [];
+        if (combinedQuery != null)
+        {
+            stakeRequestsByAddress = await combinedQuery.ToListAsync();
+        }
+
+        foreach (var txBody in response.Block.TransactionBodies)
+        {
+            foreach (var input in txBody.Inputs)
+            {
+                var stakeRequest = stakeRequestsByAddress.FirstOrDefault(s => s.TxHash == input.Id.ToHex() && s.TxIndex == input.Index);
+                if (stakeRequest is not null)
+                {
+                    var timelockOutput = txBody.Outputs
+                        .Where(o => new Address(o.Address.ToBech32()).GetPublicKeyHash().ToHex() == configuration["CoinectaTimelockValidatorHash"])
+                        .FirstOrDefault();
+
+                    if (timelockOutput is not null)
+                    {
+                        var timelockOutputEntity = Utils.MapTransactionOutputEntity(txBody.Id.ToHex(), response.Block.Slot, timelockOutput);
+                        if(IsAssetAmountLocked(stakeRequest.Amount.MultiAsset, timelockOutputEntity.Amount.MultiAsset))
+                        {
+                            stakeRequest.Status = StakeRequestStatus.Confirmed;
+                        }
+                        else
+                        {
+                            stakeRequest.Status = StakeRequestStatus.Error;
+                        }
+                    }
+                    else
+                    {
+                        stakeRequest.Status = StakeRequestStatus.Cancelled;
+                    }
+                }
+            }
         }
     }
 
@@ -90,9 +129,9 @@ public class StakeRequestByAddressReducer(
                             }
                             catch
                             {
-                                _logger.LogError("Error deserializing stake pool proxy datum: {datum} for {txHash}#{txIndex}", 
-                                    Convert.ToHexString(datum).ToLowerInvariant(), 
-                                    txBody.Id.ToHex(), 
+                                _logger.LogError("Error deserializing stake pool proxy datum: {datum} for {txHash}#{txIndex}",
+                                    Convert.ToHexString(datum).ToLowerInvariant(),
+                                    txBody.Id.ToHex(),
                                     output.Index
                                 );
                             }
@@ -102,5 +141,33 @@ public class StakeRequestByAddressReducer(
             }
         }
         return Task.CompletedTask;
+    }
+
+    private static bool IsAssetAmountLocked(Dictionary<string, Dictionary<string, ulong>> source, Dictionary<string, Dictionary<string, ulong>> target)
+    {
+        foreach (var outerPair in source)
+        {
+            string outerKey = outerPair.Key;
+
+            // Check if the outer key exists in the target dictionary
+            if (!target.ContainsKey(outerKey))
+            {
+                return false;
+            }
+
+            foreach (var innerPair in outerPair.Value)
+            {
+                string innerKey = innerPair.Key;
+                ulong innerValue = innerPair.Value;
+
+                // Check if the inner key exists and if the value is the same
+                if (!target[outerKey].ContainsKey(innerKey) || target[outerKey][innerKey] < innerValue)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true; // All keys and values exist
     }
 }

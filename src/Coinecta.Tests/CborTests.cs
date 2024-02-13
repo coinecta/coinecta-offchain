@@ -135,4 +135,43 @@ public class CborTests
         var stakePoolProxyWithInlineDatumCredentialCborHex = Convert.ToHexString(CborConverter.Serialize(stakePoolProxyWithInlineDatumCredential)).ToLowerInvariant();
         Assert.Equal("d8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffd8799fd8799fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffffffd87b9fd8799f581ccb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3ffffff1903e8d8799f011864ff581c8b05e87a51c1d4a0fa888d2bb14dbc25e8c343ea379a171b63aa84a044434e4354581c5496b3318f8ca933bbfdf19b8faa7f948d044208e0278d62c24ee73eff", stakePoolProxyWithInlineDatumCredentialCborHex);
     }
+
+    [Fact]
+    public void TimelockCborTest()
+    {
+        var timelock = CborConverter.Deserialize<Timelock>(
+            Convert.FromHexString(
+                "d8799f1903e858206c00ac8ecdbfad86c9287b2aec257f2e3875b572de8d8df27fd94dd650671c94ff"
+            )
+        );
+
+        var timelockCborHex = Convert.ToHexString(CborConverter.Serialize(timelock)).ToLowerInvariant();
+        Assert.Equal("d8799f1903e858206c00ac8ecdbfad86c9287b2aec257f2e3875b572de8d8df27fd94dd650671c94ff", timelockCborHex);
+    }
+
+    [Fact]
+    public void CIP68MetdataCborTest()
+    {
+        var timelockMetadata = CborConverter.Deserialize<CIP68Metdata>(
+            Convert.FromHexString(
+                "a24d6c6f636b65645f616d6f756e744431303030446e616d65581a5374616b65204e465420314b20434e4354202d20323430313233"
+            )
+        );
+
+        var timelockMetadataCborHex = Convert.ToHexString(CborConverter.Serialize(timelockMetadata)).ToLowerInvariant();
+        Assert.Equal("a24d6c6f636b65645f616d6f756e744431303030446e616d65581a5374616b65204e465420314b20434e4354202d20323430313233", timelockMetadataCborHex);
+    }
+
+    [Fact]
+    public void CIP68TimelockCborTest()
+    {
+        var timelock = CborConverter.Deserialize<CIP68<Timelock>>(
+            Convert.FromHexString(
+                "d8799fa24d6c6f636b65645f616d6f756e744431303030446e616d65581a5374616b65204e465420314b20434e4354202d2032343031323301d8799f1903e858206c00ac8ecdbfad86c9287b2aec257f2e3875b572de8d8df27fd94dd650671c94ffff"
+            )
+        );
+
+        var timelockCborHex = Convert.ToHexString(CborConverter.Serialize(timelock)).ToLowerInvariant();
+        Assert.Equal("d8799fa24d6c6f636b65645f616d6f756e744431303030446e616d65581a5374616b65204e465420314b20434e4354202d2032343031323301d8799f1903e858206c00ac8ecdbfad86c9287b2aec257f2e3875b572de8d8df27fd94dd650671c94ffff", timelockCborHex);
+    }
 }

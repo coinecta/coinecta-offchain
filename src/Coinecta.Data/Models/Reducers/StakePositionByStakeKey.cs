@@ -4,31 +4,22 @@ using Coinecta.Data.Models.Datums;
 
 namespace Coinecta.Data.Models.Reducers;
 
-public enum StakeRequestStatus
+public record StakePositionByStakeKey
 {
-    Pending,
-    Confirmed,
-    Cancelled,
-    Error
-}
-
-public class StakeRequestByAddress
-{
-    public string Address { get; init; } = default!;
+    public string StakeKey { get; init; } = default!;
     public ulong Slot { get; init; }
     public string TxHash { get; init; } = default!;
     public ulong TxIndex { get; init; }
     public Value Amount { get; init; } = default!;
-    public StakeRequestStatus Status { get; set; }
-
+    
     [NotMapped]
-    public StakePoolProxy<NoDatum> StakePoolProxy { get; set; } = default!;
-
-    public JsonElement StakePoolJson
+    public CIP68<Timelock> StakePosition { get; set; } = default!;
+    
+    public JsonElement StakePositionJson
     {
         get
         {
-            var jsonString = JsonSerializer.Serialize(StakePoolProxy);
+            var jsonString = JsonSerializer.Serialize(StakePosition);
             return JsonDocument.Parse(jsonString).RootElement;
         }
 
@@ -36,11 +27,11 @@ public class StakeRequestByAddress
         {
             if (value.ValueKind == JsonValueKind.Undefined || value.ValueKind == JsonValueKind.Null)
             {
-                throw new Exception("Invalid StakePoolJson");
+                throw new Exception("Invalid StakePositionJson");
             }
             else
             {
-                StakePoolProxy = JsonSerializer.Deserialize<StakePoolProxy<NoDatum>>(value.GetRawText()) ?? throw new Exception("Invalid StakePoolJson");
+                StakePosition = JsonSerializer.Deserialize<CIP68<Timelock>>(value.GetRawText()) ?? throw new Exception("Invalid StakePositionJson");
             }
         }
     }
