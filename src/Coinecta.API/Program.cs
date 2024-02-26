@@ -52,7 +52,7 @@ app.UseHttpsRedirection();
 
 app.MapGet("/stake/pools/{address}", (IDbContextFactory<CoinectaDbContext> dbContextFactory, string address) =>
 {
-    var dbContext = dbContextFactory.CreateDbContext();
+    using var dbContext = dbContextFactory.CreateDbContext();
     var stakePools = dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
     return stakePools;
 })
@@ -66,7 +66,7 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
         return Results.BadRequest("No stake keys provided");
     }
 
-    var dbContext = dbContextFactory.CreateDbContext();
+    using var dbContext = dbContextFactory.CreateDbContext();
 
     // Current Timestamp
     DateTimeOffset dto = new(DateTime.UtcNow);
@@ -125,7 +125,7 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
         return Results.BadRequest("No stake keys provided");
     }
 
-    var dbContext = dbContextFactory.CreateDbContext();
+    using var dbContext = dbContextFactory.CreateDbContext();
 
     // Current Timestamp
     DateTimeOffset dto = new(DateTime.UtcNow);
