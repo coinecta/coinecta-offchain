@@ -3,6 +3,7 @@ using System.Text.Json;
 using Coinecta.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    partial class CoinectaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240222114228_AddLocktime")]
+    partial class AddLocktime
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -167,34 +170,6 @@ namespace Coinecta.Data.Migrations
 
             modelBuilder.Entity("Coinecta.Data.Models.Reducers.StakePositionByStakeKey", b =>
                 {
-                    b.OwnsOne("Coinecta.Data.Models.Datums.Rational", "Interest", b1 =>
-                        {
-                            b1.Property<string>("StakePositionByStakeKeyStakeKey")
-                                .HasColumnType("text");
-
-                            b1.Property<decimal>("StakePositionByStakeKeySlot")
-                                .HasColumnType("numeric(20,0)");
-
-                            b1.Property<string>("StakePositionByStakeKeyTxHash")
-                                .HasColumnType("text");
-
-                            b1.Property<decimal>("StakePositionByStakeKeyTxIndex")
-                                .HasColumnType("numeric(20,0)");
-
-                            b1.Property<decimal>("Denominator")
-                                .HasColumnType("numeric(20,0)");
-
-                            b1.Property<decimal>("Numerator")
-                                .HasColumnType("numeric(20,0)");
-
-                            b1.HasKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex");
-
-                            b1.ToTable("StakePositionByStakeKeys", "coinecta");
-
-                            b1.WithOwner()
-                                .HasForeignKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex");
-                        });
-
                     b.OwnsOne("Coinecta.Data.Models.Value", "Amount", b1 =>
                         {
                             b1.Property<string>("StakePositionByStakeKeyStakeKey")
@@ -224,9 +199,6 @@ namespace Coinecta.Data.Migrations
                         });
 
                     b.Navigation("Amount")
-                        .IsRequired();
-
-                    b.Navigation("Interest")
                         .IsRequired();
                 });
 

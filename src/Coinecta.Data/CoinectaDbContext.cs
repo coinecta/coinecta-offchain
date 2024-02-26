@@ -27,6 +27,7 @@ public class CoinectaDbContext(DbContextOptions<CoinectaDbContext> options, ICon
         modelBuilder.Entity<StakeRequestByAddress>().OwnsOne(item => item.Amount);
         modelBuilder.Entity<StakePositionByStakeKey>().HasKey(item => new { item.StakeKey, item.Slot, item.TxHash, item.TxIndex });
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Amount);
+        modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Interest);
         base.OnModelCreating(modelBuilder);
     }
 }

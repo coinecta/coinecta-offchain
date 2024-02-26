@@ -11,6 +11,8 @@ public record StakePositionByStakeKey
     public string TxHash { get; init; } = default!;
     public ulong TxIndex { get; init; }
     public Value Amount { get; init; } = default!;
+    public ulong LockTime { get; init; }
+    public Rational Interest { get; init; } = default!;
     
     [NotMapped]
     public CIP68<Timelock> StakePosition { get; set; } = default!;

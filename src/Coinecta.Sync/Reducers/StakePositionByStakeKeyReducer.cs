@@ -65,7 +65,7 @@ public class StakePositionByStakeKeyReducer(
         }
     }
 
-    private Task ProcessOutputAync(NextResponse response)
+    private async Task ProcessOutputAync(NextResponse response)
     {
         foreach (var txBody in response.Block.TransactionBodies)
         {
@@ -90,6 +90,22 @@ public class StakePositionByStakeKeyReducer(
                                     var assetName = stakeKeyBundle.Keys.FirstOrDefault(key => key.StartsWith("000643b0"));
                                     if (assetName is not null)
                                     {
+                                        
+                                        StakeRequestByAddress? stakeRequest = null;
+
+                                        while(stakeRequest is null)
+                                        {
+                                            foreach(var input in txBody.Inputs)
+                                            {
+                                                stakeRequest = await _dbContext.StakeRequestByAddresses.FirstOrDefaultAsync(s => s.TxHash == input.Id.ToHex() && s.TxIndex == input.Index);
+                                                if (stakeRequest is not null)
+                                                {
+                                                    break;
+                                                }
+                                                await Task.Delay(100);
+                                            }
+                                        }
+
                                         var stakePositionByKey = new StakePositionByStakeKey
                                         {
                                             StakeKey = configuration["CoinectaStakeKeyPolicyId"]! + assetName.Replace("000643b0", string.Empty),
@@ -97,7 +113,9 @@ public class StakePositionByStakeKeyReducer(
                                             TxHash = txBody.Id.ToHex(),
                                             TxIndex = output.Index,
                                             Amount = entityUtxo.Amount,
-                                            StakePosition = timelockDatum
+                                            StakePosition = timelockDatum,
+                                            LockTime = timelockDatum.Extra.Lockuntil,
+                                            Interest = stakeRequest.StakePoolProxy.RewardMultiplier
                                         };
 
                                         _dbContext.StakePositionByStakeKeys.Add(stakePositionByKey);
@@ -117,6 +135,5 @@ public class StakePositionByStakeKeyReducer(
                 }
             }
         }
-        return Task.CompletedTask;
     }
 }
