@@ -4,6 +4,10 @@ using Coinecta.Data;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Coinecta.API.Models.Response;
+using Coinecta.API.Models;
+using Coinecta.API.Models.Request;
+using Coinecta.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +26,8 @@ builder.Services.AddDbContextFactory<CoinectaDbContext>(options =>
             }
         );
 });
+
+builder.Services.AddScoped<TransactionBuildingService>();
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -165,21 +171,51 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
 .WithName("GetStakePositionsByStakeKeys")
 .WithOpenApi();
 
+app.MapPost("/transaction/stake/add", async (TransactionBuildingService txBuildingService, [FromBody] AddStakeRequest request) =>
+{
+    try
+    {
+        var result = await txBuildingService.AddStakeAsync(request);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+})
+.WithName("AddStakeTransaction")
+.WithOpenApi();
+
+app.MapPost("/transaction/finalize", (TransactionBuildingService txBuildingService, [FromBody] FinalizeTransactionRequest request) =>
+{
+    try
+    {
+        var result = txBuildingService.FinalizeTx(request);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+})
+.WithName("FinalizeTransaction")
+.WithOpenApi();
+
+app.MapPost("/transaction/stake/cancel", async (TransactionBuildingService txBuildingService, [FromBody] CancelStakeRequest request) =>
+{
+    try
+    {
+        var result = await txBuildingService.CancelStakeAsync(request);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+})
+.WithName("CancelStakeTransaction")
+.WithOpenApi();
+
 app.UseCors();
 
 app.Run();
-
-class StakeSummaryResponse
-{
-    public Dictionary<string, StakeStats> PoolStats { get; set; } = [];
-    public StakeStats TotalStats { get; set; } = new();
-}
-
-
-class StakeStats
-{
-    public ulong TotalPortfolio { get; set; }
-    public ulong TotalStaked { get; set; }
-    public ulong TotalVested { get; set; }
-    public ulong UnclaimedTokens { get; set; }
-}
