@@ -9,7 +9,7 @@ using Coinecta.API.Models;
 using Coinecta.API.Models.Request;
 using Coinecta.API.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContextFactory<CoinectaDbContext>(options =>
 {
@@ -45,7 +45,7 @@ builder.Services.AddCors(options =>
         });
 });
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -58,8 +58,8 @@ app.UseHttpsRedirection();
 
 app.MapGet("/stake/pools/{address}", (IDbContextFactory<CoinectaDbContext> dbContextFactory, string address) =>
 {
-    using var dbContext = dbContextFactory.CreateDbContext();
-    var stakePools = dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+    Task<List<Coinecta.Data.Models.Reducers.StakePoolByAddress>> stakePools = dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
     return stakePools;
 })
 .WithName("GetLatestStakePoolsByAddress")
@@ -72,30 +72,31 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
         return Results.BadRequest("No stake keys provided");
     }
 
-    using var dbContext = dbContextFactory.CreateDbContext();
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
     // Current Timestamp
     DateTimeOffset dto = new(DateTime.UtcNow);
     ulong currentTimestamp = (ulong)dto.ToUnixTimeMilliseconds();
 
     // Get Stake Positions
-    var stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
+    List<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
 
     // Filter Stake Positions
-    var lockedPositions = stakePositions.Where(sp => sp.LockTime > currentTimestamp);
-    var unclaimedPositions = stakePositions.Where(sp => sp.LockTime <= currentTimestamp);
+    IEnumerable<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> lockedPositions = stakePositions.Where(sp => sp.LockTime > currentTimestamp);
+    IEnumerable<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> unclaimedPositions = stakePositions.Where(sp => sp.LockTime <= currentTimestamp);
 
     // Transaform Stake Positions
-    var result = new StakeSummaryResponse();
+    StakeSummaryResponse result = new StakeSummaryResponse();
 
     stakePositions.ForEach(sp =>
     {
         // Remove NFT
         sp.Amount.MultiAsset.Remove(configuration["CoinectaStakeKeyPolicyId"]!);
-        var isLocked = sp.LockTime > currentTimestamp;
-        var policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
-        var asset = sp.Amount.MultiAsset[policyId!];
-        var assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
-        var total = asset.Values.FirstOrDefault();
+        bool isLocked = sp.LockTime > currentTimestamp;
+        string? policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
+        Dictionary<string, ulong> asset = sp.Amount.MultiAsset[policyId!];
+        string assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
+        ulong total = asset.Values.FirstOrDefault();
 
         if (result.PoolStats.TryGetValue(assetNameAscii, out StakeStats? value))
         {
@@ -130,14 +131,14 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
         return Results.BadRequest("No stake keys provided");
     }
 
-    using var dbContext = dbContextFactory.CreateDbContext();
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
 
     // Current Timestamp
     DateTimeOffset dto = new(DateTime.UtcNow);
     ulong currentTimestamp = (ulong)dto.ToUnixTimeMilliseconds();
 
     // Get Stake Positions
-    var stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
+    List<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
 
     // Transaform Stake Positions
     var result = stakePositions.Select(sp =>
@@ -146,13 +147,13 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
         sp.Amount.MultiAsset.Remove(configuration["CoinectaStakeKeyPolicyId"]!);
 
         double interest = sp.Interest.Numerator / (double)sp.Interest.Denominator;
-        var policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
-        var asset = sp.Amount.MultiAsset[policyId!];
-        var assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
-        var total = asset.Values.FirstOrDefault();
-        var initial = total / (1 + interest);
-        var bonus = total - initial;
-        var unlockDate = DateTimeOffset.FromUnixTimeMilliseconds((long)sp.LockTime);
+        string? policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
+        Dictionary<string, ulong> asset = sp.Amount.MultiAsset[policyId!];
+        string assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
+        ulong total = asset.Values.FirstOrDefault();
+        double initial = total / (1 + interest);
+        double bonus = total - initial;
+        DateTimeOffset unlockDate = DateTimeOffset.FromUnixTimeMilliseconds((long)sp.LockTime);
 
         return new
         {
@@ -174,7 +175,7 @@ app.MapPost("/transaction/stake/add", async (TransactionBuildingService txBuildi
 {
     try
     {
-        var result = await txBuildingService.AddStakeAsync(request);
+        string result = await txBuildingService.AddStakeAsync(request);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -189,7 +190,7 @@ app.MapPost("/transaction/finalize", (TransactionBuildingService txBuildingServi
 {
     try
     {
-        var result = txBuildingService.FinalizeTx(request);
+        string result = txBuildingService.FinalizeTx(request);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -204,7 +205,7 @@ app.MapPost("/transaction/stake/cancel", async (TransactionBuildingService txBui
 {
     try
     {
-        var result = await txBuildingService.CancelStakeAsync(request);
+        string result = await txBuildingService.CancelStakeAsync(request);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -213,6 +214,21 @@ app.MapPost("/transaction/stake/cancel", async (TransactionBuildingService txBui
     }
 })
 .WithName("CancelStakeTransaction")
+.WithOpenApi();
+
+app.MapPost("/transaction/stake/claim", async (TransactionBuildingService txBuildingService, [FromBody] ClaimStakeRequest request) =>
+{
+    try
+    {
+        string result = await txBuildingService.ClaimStakeAsync(request);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+})
+.WithName("ClaimStakeTransaction")
 .WithOpenApi();
 
 app.UseCors();
