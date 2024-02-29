@@ -19,9 +19,11 @@ using Microsoft.EntityFrameworkCore;
 using PeterO.Cbor2;
 using Coinecta.API.Extensions;
 using Address = CardanoSharp.Wallet.Models.Addresses.Address;
-using CoinectaAddress = Coinecta.Data.Models.Datums.Address;
-using CborSerialization;
+using CoinectaAddress = Cardano.Sync.Data.Models.Datums.Address;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
+using RewardSetting = Coinecta.Data.Models.Datums.RewardSetting;
+using CborSerialization;
+using Cardano.Sync.Data.Models.Datums;
 
 namespace Coinecta.API.Services;
 public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration)

@@ -16,12 +16,12 @@ builder.Services.AddDbContextFactory<CoinectaDbContext>(options =>
     options
     .UseNpgsql(
         builder.Configuration
-        .GetConnectionString("CoinectaContext"),
+        .GetConnectionString("CardanoContext"),
             x =>
             {
                 x.MigrationsHistoryTable(
                     "__EFMigrationsHistory",
-                    builder.Configuration.GetConnectionString("CoinectaContextSchema")
+                    builder.Configuration.GetConnectionString("CardanoContextSchema")
                 );
             }
         );
@@ -73,7 +73,6 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
     }
 
     using var dbContext = dbContextFactory.CreateDbContext();
-
     // Current Timestamp
     DateTimeOffset dto = new(DateTime.UtcNow);
     ulong currentTimestamp = (ulong)dto.ToUnixTimeMilliseconds();

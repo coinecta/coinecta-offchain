@@ -23,7 +23,8 @@ public class StakePoolByAddressReducer(
     {
         _dbContext = dbContextFactory.CreateDbContext();
         var rollbackSlot = response.Block.Slot;
-        _dbContext.StakePoolByAddresses.RemoveRange(_dbContext.StakePoolByAddresses.Where(s => s.Slot > rollbackSlot).AsNoTracking());
+        _dbContext.StakePoolByAddresses.RemoveRange(_dbContext.StakePoolByAddresses.Where(s => s.Slot > rollbackSlot));
+        _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
         return Task.CompletedTask;
     }

@@ -23,7 +23,8 @@ public class StakePositionByStakeKeyReducer(
     {
         _dbContext = dbContextFactory.CreateDbContext();
         var rollbackSlot = response.Block.Slot;
-        _dbContext.StakePositionByStakeKeys.RemoveRange(_dbContext.StakePositionByStakeKeys.Where(s => s.Slot > rollbackSlot).AsNoTracking());
+        _dbContext.StakePositionByStakeKeys.RemoveRange(_dbContext.StakePositionByStakeKeys.Where(s => s.Slot > rollbackSlot));
+        _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
         return Task.CompletedTask;
     }
