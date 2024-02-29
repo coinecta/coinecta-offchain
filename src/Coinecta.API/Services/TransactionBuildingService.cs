@@ -24,6 +24,7 @@ using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOut
 using RewardSetting = Coinecta.Data.Models.Datums.RewardSetting;
 using CborSerialization;
 using Cardano.Sync.Data.Models.Datums;
+using Coinecta.API.Models;
 
 namespace Coinecta.API.Services;
 public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration)
