@@ -16,8 +16,9 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.0" />
+    <PackageReference Include="SAIB.Cardano.Sync" Version="0.2.5-alpha" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
-    <PackageReference Include="Pallas.NET" Version="0.1.14" />
+    <PackageReference Include="Pallas.NET" Version="0.1.15" />
   </ItemGroup>
 
   <ItemGroup>

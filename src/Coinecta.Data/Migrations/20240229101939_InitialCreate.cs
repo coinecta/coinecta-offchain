@@ -29,6 +29,20 @@ namespace Coinecta.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ReducerStates",
+                schema: "coinecta",
+                columns: table => new
+                {
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    Hash = table.Column<string>(type: "text", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ReducerStates", x => x.Name);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "StakePoolByAddresses",
                 schema: "coinecta",
                 columns: table => new
@@ -44,6 +58,27 @@ namespace Coinecta.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_StakePoolByAddresses", x => new { x.Address, x.Slot, x.TxHash, x.TxIndex });
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StakePositionByStakeKeys",
+                schema: "coinecta",
+                columns: table => new
+                {
+                    StakeKey = table.Column<string>(type: "text", nullable: false),
+                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    TxHash = table.Column<string>(type: "text", nullable: false),
+                    TxIndex = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    Amount_Coin = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    Amount_MultiAssetJson = table.Column<JsonElement>(type: "jsonb", nullable: false),
+                    LockTime = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    Interest_Numerator = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    Interest_Denominator = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    StakePositionJson = table.Column<JsonElement>(type: "jsonb", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StakePositionByStakeKeys", x => new { x.StakeKey, x.Slot, x.TxHash, x.TxIndex });
                 });
 
             migrationBuilder.CreateTable(
@@ -83,6 +118,18 @@ namespace Coinecta.Data.Migrations
                 {
                     table.PrimaryKey("PK_TransactionOutputs", x => new { x.Id, x.Index });
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Blocks_Slot",
+                schema: "coinecta",
+                table: "Blocks",
+                column: "Slot");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TransactionOutputs_Slot",
+                schema: "coinecta",
+                table: "TransactionOutputs",
+                column: "Slot");
         }
 
         /// <inheritdoc />
@@ -93,7 +140,15 @@ namespace Coinecta.Data.Migrations
                 schema: "coinecta");
 
             migrationBuilder.DropTable(
+                name: "ReducerStates",
+                schema: "coinecta");
+
+            migrationBuilder.DropTable(
                 name: "StakePoolByAddresses",
+                schema: "coinecta");
+
+            migrationBuilder.DropTable(
+                name: "StakePositionByStakeKeys",
                 schema: "coinecta");
 
             migrationBuilder.DropTable(

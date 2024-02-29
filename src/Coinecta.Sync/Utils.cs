@@ -1,7 +1,8 @@
 using PallasDotnet.Models;
-using TransactionOutputEntity = Coinecta.Data.Models.TransactionOutput;
-using ValueEntity = Coinecta.Data.Models.Value;
-using DatumEntity = Coinecta.Data.Models.Datum;
+using TransactionOutputEntity = Cardano.Sync.Data.Models.TransactionOutput;
+using ValueEntity = Cardano.Sync.Data.Models.Value;
+using DatumEntity = Cardano.Sync.Data.Models.Datum;
+using DatumType = Cardano.Sync.Data.Models.DatumType;
 
 namespace Coinecta;
 
@@ -15,7 +16,7 @@ public static class Utils
             Address = output.Address.ToBech32(),
             Slot = slot,
             Index = Convert.ToUInt32(output.Index),
-            Datum = output.Datum is null ? null : new DatumEntity((Data.Models.DatumType)output.Datum.Type, output.Datum.Data),
+            Datum = output.Datum is null ? null : new DatumEntity((DatumType)output.Datum.Type, output.Datum.Data),
             Amount = new ValueEntity
             {
                 Coin = output.Amount.Coin,

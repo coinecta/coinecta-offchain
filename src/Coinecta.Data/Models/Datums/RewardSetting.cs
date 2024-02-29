@@ -1,5 +1,6 @@
 
 using System.Formats.Cbor;
+using Cardano.Sync.Data.Models.Datums;
 using CborSerialization;
 
 namespace Coinecta.Data.Models.Datums;

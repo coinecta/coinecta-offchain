@@ -4,10 +4,11 @@ using Coinecta;
 using Coinecta.Data;
 using Coinecta.Data.Models.Datums;
 using Coinecta.Data.Models.Reducers;
-using Coinecta.Sync.Reducers;
+using Cardano.Sync.Reducers;
 using Microsoft.EntityFrameworkCore;
 using PallasDotnet.Models;
 using Address = CardanoSharp.Wallet.Models.Addresses.Address;
+using Cardano.Sync.Data.Models.Datums;
 
 public class StakeRequestByAddressReducer(
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
@@ -18,14 +19,13 @@ public class StakeRequestByAddressReducer(
     private CoinectaDbContext _dbContext = default!;
     private readonly ILogger<StakeRequestByAddressReducer> _logger = logger;
 
-    public async Task RollBackwardAsync(NextResponse response)
+    public Task RollBackwardAsync(NextResponse response)
     {
-
         _dbContext = dbContextFactory.CreateDbContext();
         var rollbackSlot = response.Block.Slot;
-        var schema = configuration.GetConnectionString("CoinectaContextSchema");
-        await _dbContext.Database.ExecuteSqlRawAsync($"DELETE FROM \"{schema}\".\"StakeRequestByAddresses\" WHERE \"Slot\" > {rollbackSlot}");
+        _dbContext.StakeRequestByAddresses.RemoveRange(_dbContext.StakeRequestByAddresses.Where(s => s.Slot > rollbackSlot).AsNoTracking());
         _dbContext.Dispose();
+        return Task.CompletedTask;
     }
 
     public async Task RollForwardAsync(NextResponse response)
