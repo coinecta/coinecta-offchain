@@ -21,7 +21,6 @@ using Coinecta.API.Extensions;
 using Address = CardanoSharp.Wallet.Models.Addresses.Address;
 using CoinectaAddress = Coinecta.Data.Models.Datums.Address;
 using CborSerialization;
-using Coinecta.Data.Models;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 
 namespace Coinecta.API.Services;
@@ -66,7 +65,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         // Validator output
         TransactionOutputValue stakePoolProxyOutputValue = new()
         {
-            Coin = 2_000_000,
+            Coin = 2_500_000,
             MultiAsset = []
         };
 
@@ -100,7 +99,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         txBodyBuilder.AddOutput(stakePoolProxyOutput);
         coinSelectionResult.Inputs.ForEach(input => txBodyBuilder.AddInput(input));
         coinSelectionResult.ChangeOutputs.ForEach((change) => txBodyBuilder.AddOutput(change));
-        txBodyBuilder.SetValidBefore(uint.MaxValue);
 
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
         txBuilder.SetBody(txBodyBuilder);
@@ -122,19 +120,39 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             .Where(s => s.TxHash == request.StakeRequestOutputReference.TxHash && s.TxIndex == request.StakeRequestOutputReference.Index)
             .FirstOrDefaultAsync() ?? throw new Exception("Stake request not found");
 
+        // Wallet output
+        TransactionInput stakeProxyReferenceInput = CoinectaUtils.GetStakePoolProxyScriptReferenceInput(configuration);
+        KeyValuePair<string, Dictionary<string, ulong>> stakeProxyUtxoTokenValue = stakeRequestData.Amount.MultiAsset.First();
+        TransactionOutputValue walletOutputValue = new()
+        {
+            Coin = stakeRequestData.Amount.Coin,
+            MultiAsset = []
+        };
+
+        walletOutputValue.MultiAsset.Add(Convert.FromHexString(stakeProxyUtxoTokenValue.Key), new()
+        {
+            Token = new()
+            {
+                { Convert.FromHexString(stakeProxyUtxoTokenValue.Value.First().Key), (long)stakeProxyUtxoTokenValue.Value.First().Value }
+            }
+        });
+
         TransactionInput stakePoolProxyInput = new()
         {
             TransactionId = Convert.FromHexString(request.StakeRequestOutputReference.TxHash),
-            TransactionIndex = (uint)request.StakeRequestOutputReference.Index
+            TransactionIndex = (uint)request.StakeRequestOutputReference.Index,
+            Output = new()
+            {
+                Address = new Address(stakeRequestData.Address).GetBytes(),
+                Value = walletOutputValue,
+                DatumOption = new()
+                {
+                    RawData = CborConverter.Serialize(stakeRequestData.StakePoolProxy)
+                }
+            }
         };
 
         List<Utxo> walletUtxos = CoinectaUtils.ConvertUtxoListCbor(request.WalletUtxoListCbor).ToList();
-
-        TransactionInput validatorReferenceScriptInput = new()
-        {
-            TransactionId = Convert.FromHexString(configuration["CoinectaValidatorScriptReferenceTxhash"]!),
-            TransactionIndex = uint.Parse(configuration["CoinectaValidatorScriptReferenceTxIndex"]!)
-        };
 
         // Wallet coin selection
         LargestFirstStrategy coinSelectionStrategy = new();
@@ -146,28 +164,12 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         TransactionOutput collateralOutput = new()
         {
             Address = changeAddress.GetBytes(),
-            Value = new TransactionOutputValue()
+            Value = new()
             {
                 Coin = 5_000_000,
+                MultiAsset = []
             }
         };
-
-        // Wallet output
-        var stakeProxyUtxoTokenValue = stakeRequestData.Amount.MultiAsset.First();
-        TransactionOutputValue walletOutputValue = new()
-        {
-            Coin = stakeRequestData.Amount.Coin,
-            MultiAsset = []
-        };
-
-        walletOutputValue.MultiAsset.Add(Convert.FromHexString(stakeProxyUtxoTokenValue.Key), new()
-        {
-            Token = new()
-            {
-                { Convert.FromHexString(stakeProxyUtxoTokenValue.Value.First().Key), (long)stakeProxyUtxoTokenValue.Value.First().Value
-}
-            }
-        });
 
         TransactionOutput walletOutput = new()
         {
@@ -176,9 +178,9 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         };
 
         CoinSelection coinSelectionResult = coinSelectionService
-            .GetCoinSelection([collateralOutput], utxos: walletUtxos, changeAddress.ToString(), limit: 1) ?? throw new Exception("Coin selection failed");
+            .GetCoinSelection([collateralOutput], walletUtxos, changeAddress.ToString(), limit: 1) ?? throw new Exception("Coin selection failed");
 
-        var collateralInput = coinSelectionResult.Inputs.First();
+        TransactionInput collateralInput = coinSelectionResult.Inputs.First();
 
         RedeemerBuilder? redeemerBuilder = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Spend)
@@ -191,12 +193,11 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         txBodyBuilder.AddOutput(walletOutput);
         txBodyBuilder.SetScriptDataHash(
             [redeemerBuilder!.Build()],
-            null,
+            [],
             CostModelUtility.PlutusV2CostModel.Serialize());
-        txBodyBuilder.AddReferenceInput(validatorReferenceScriptInput);
+        txBodyBuilder.AddReferenceInput(stakeProxyReferenceInput);
         txBodyBuilder.AddRequiredSigner(stakeRequestData.StakePoolProxy.Owner.KeyHash);
         txBodyBuilder.AddCollateralInput(collateralInput);
-        txBodyBuilder.SetValidBefore(uint.MaxValue);
 
         ITransactionWitnessSetBuilder txWitnesssetBuilder = TransactionWitnessSetBuilder.Create;
         txWitnesssetBuilder.AddRedeemer(redeemerBuilder!.Build());
@@ -204,11 +205,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
         txBuilder.SetBody(txBodyBuilder);
         txBuilder.SetWitnesses(txWitnesssetBuilder);
-
-        var unsignedTx = txBuilder.Build();
-
-        var txEvalResults = CsBindgen.UPLCMethods.GetExUnits(unsignedTx, NetworkType.Preview);
-
 
         Transaction tx = txBuilder.BuildAndSetExUnits(NetworkType.Preview);
         uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
@@ -225,7 +221,16 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         TransactionWitnessSet witnessSet = CoinectaUtils.ConvertTxWitnessSetCbor(request.TxWitnessCbor);
         ITransactionWitnessSetBuilder witnessSetBuilder = TransactionWitnessSetBuilder.Create;
         witnessSet.VKeyWitnesses.ToList().ForEach((witness) => witnessSetBuilder.AddVKeyWitness(witness));
-        tx.TransactionWitnessSet = witnessSetBuilder.Build();
+
+        if (tx.TransactionWitnessSet is null)
+        {
+            tx.TransactionWitnessSet = witnessSetBuilder.Build();
+        }
+        else
+        {
+            tx.TransactionWitnessSet.VKeyWitnesses = witnessSet.VKeyWitnesses;
+        }
+
         string signedTxCbor = Convert.ToHexString(tx.Serialize());
 
         return signedTxCbor;
