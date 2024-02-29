@@ -10,6 +10,7 @@ using CardanoSharp.Wallet.Models.Transactions;
 using CardanoSharp.Wallet.Models.Transactions.TransactionWitness;
 using CardanoSharp.Wallet.Extensions.Models.Transactions.TransactionWitnesses;
 using CardanoSharp.Wallet.Extensions.Models.Transactions;
+using Coinecta.API.Models;
 
 namespace Coinecta.API.Utils;
 
@@ -56,5 +57,37 @@ public static class CoinectaUtils
     public static Address ValidatorAddress(PlutusV2Script plutusScript)
     {
         return AddressUtility.GetEnterpriseScriptAddress(plutusScript, NetworkType.Preview);
+    }
+
+    public static TransactionOutput ConvertTxOutputCbor(string txOutputCbor)
+    {
+        var txOutputCborObj = CBORObject.DecodeFromBytes(Convert.FromHexString(txOutputCbor));
+        return txOutputCborObj.GetTransactionOutput();
+    }
+
+    public static TransactionInput BuildTxInput(OutputReference outputRef, TransactionOutput output)
+    {
+        return new TransactionInput
+        {
+            TransactionId = Convert.FromHexString(outputRef.TxHash),
+            TransactionIndex = (uint)outputRef.Index,
+            Output = output
+        };
+    }
+
+    public static TransactionInput GetStakePoolProxyScriptReferenceInput(IConfiguration configuration)
+    {
+        var txHash = configuration["CoinectaStakeProxyScriptReferenceTxHash"]!;
+        var txIndex = configuration["CoinectaStakeProxyScriptReferenceTxIndex"]!;
+        var txOutputRef = new OutputReference
+        {
+            TxHash = txHash,
+            Index = uint.Parse(txIndex)
+        };
+        var txOutputCbor = configuration["CoinectaStakeProxyScriptReferenceOutputCbor"]!;
+        var txOutput = ConvertTxOutputCbor(txOutputCbor);
+        var resolvedTxInput = BuildTxInput(txOutputRef, txOutput);
+
+        return resolvedTxInput;
     }
 }
