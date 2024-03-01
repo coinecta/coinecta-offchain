@@ -35,11 +35,15 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
     public async Task<string> AddStakeAsync(AddStakeRequest request)
     {
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+        List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses
+            .Where(s => s.Address == request.StakePool.Address)
+            .OrderByDescending(s => s.Slot)
+            .ToListAsync();
 
-        // Fetch stake pool data
-        StakePoolByAddress? stakePoolData = await dbContext.StakePoolByAddresses
-            .Where(s => s.TxHash == request.PoolOutputReference.TxHash && s.TxIndex == request.PoolOutputReference.Index)
-            .FirstOrDefaultAsync() ?? throw new Exception("Stake pool not found");
+        StakePoolByAddress stakePoolData = stakePools
+            .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(request.StakePool.OwnerPkh, StringComparison.InvariantCultureIgnoreCase))
+            .Where(sp => sp.Amount.MultiAsset.ContainsKey(request.StakePool.PolicyId) && sp.Amount.MultiAsset[request.StakePool.PolicyId].ContainsKey(request.StakePool.AssetName))
+            .FirstOrDefault() ?? throw new Exception("Stake pool not found");
 
         // Stake details
         Address ownerAddress = new(request.OwnerAddress);
@@ -413,22 +417,22 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         TransactionInput collateralInputUtxo = collateralInputResult.Inputs.First();
         txBodyBuilder.AddCollateralInput(collateralInputUtxo);
 
-        var txInputs = txBodyBuilder.Build().TransactionInputs.ToList();
+        List<TransactionInput> txInputs = txBodyBuilder.Build().TransactionInputs.ToList();
         txInputs.Sort((a, b) =>
         {
-            var aTxId = Convert.ToHexString(a.TransactionId) + a.TransactionIndex;
-            var bTxId = Convert.ToHexString(b.TransactionId) + b.TransactionIndex;
+            string aTxId = Convert.ToHexString(a.TransactionId) + a.TransactionIndex;
+            string bTxId = Convert.ToHexString(b.TransactionId) + b.TransactionIndex;
             return aTxId.CompareTo(bTxId);
         });
-        var txInputOutrefs = txInputs.Select(i => Convert.ToHexString(i.TransactionId) + i.TransactionIndex).ToList();
-        var timeLockValidatorScriptHash = configuration["CoinectaTimeLockValidatorScriptHash"]!;
+        List<string> txInputOutrefs = txInputs.Select(i => Convert.ToHexString(i.TransactionId) + i.TransactionIndex).ToList();
+        string timeLockValidatorScriptHash = configuration["CoinectaTimeLockValidatorScriptHash"]!;
         // Build Redeemers
         txInputs.ForEach(input =>
         {
-            var index = txInputs.IndexOf(input);
+            int index = txInputs.IndexOf(input);
 
-            var inputAddress = new Address(input.Output!.Address);
-            var inputAddressHash = Convert.ToHexString(inputAddress.GetPublicKeyHash()).ToLower();
+            Address inputAddress = new Address(input.Output!.Address);
+            string inputAddressHash = Convert.ToHexString(inputAddress.GetPublicKeyHash()).ToLower();
             if (inputAddressHash == timeLockValidatorScriptHash)
             {
                 RedeemerBuilder? redeemerBuilder = RedeemerBuilder.Create
