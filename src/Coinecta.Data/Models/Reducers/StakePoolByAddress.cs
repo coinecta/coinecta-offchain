@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
+using Cardano.Sync.Data.Models;
 using Coinecta.Data.Models.Datums;
 
 namespace Coinecta.Data.Models.Reducers;

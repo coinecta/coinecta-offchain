@@ -16,12 +16,12 @@ builder.Services.AddDbContextFactory<CoinectaDbContext>(options =>
     options
     .UseNpgsql(
         builder.Configuration
-        .GetConnectionString("CoinectaContext"),
+        .GetConnectionString("CardanoContext"),
             x =>
             {
                 x.MigrationsHistoryTable(
                     "__EFMigrationsHistory",
-                    builder.Configuration.GetConnectionString("CoinectaContextSchema")
+                    builder.Configuration.GetConnectionString("CardanoContextSchema")
                 );
             }
         );
@@ -56,13 +56,23 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapGet("/stake/pools/{address}", (IDbContextFactory<CoinectaDbContext> dbContextFactory, string address) =>
-{
+app.MapGet("/stake/pools/{address}/{ownerPkh}/{policyId}/{assetName}", async (
+    IDbContextFactory<CoinectaDbContext> dbContextFactory,
+    string address,
+    string ownerPkh,
+    string policyId,
+    string assetName
+) => {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
-    Task<List<Coinecta.Data.Models.Reducers.StakePoolByAddress>> stakePools = dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
-    return stakePools;
+    List<Coinecta.Data.Models.Reducers.StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
+    return Results.Ok(
+        stakePools
+            .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(ownerPkh, StringComparison.InvariantCultureIgnoreCase))
+            .Where(sp => sp.Amount.MultiAsset.ContainsKey(policyId) && sp.Amount.MultiAsset[policyId].ContainsKey(assetName))
+            .First()
+    );
 })
-.WithName("GetLatestStakePoolsByAddress")
+.WithName("GetStakePool")
 .WithOpenApi();
 
 app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration, [FromBody] List<string> stakeKeys) =>

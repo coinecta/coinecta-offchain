@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    [Migration("20240222114228_AddLocktime")]
-    partial class AddLocktime
+    [Migration("20240229101939_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -26,7 +26,7 @@ namespace Coinecta.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Coinecta.Data.Models.Block", b =>
+            modelBuilder.Entity("Cardano.Sync.Data.Models.Block", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("text");
@@ -39,7 +39,48 @@ namespace Coinecta.Data.Migrations
 
                     b.HasKey("Id", "Number", "Slot");
 
+                    b.HasIndex("Slot");
+
                     b.ToTable("Blocks", "coinecta");
+                });
+
+            modelBuilder.Entity("Cardano.Sync.Data.Models.ReducerState", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Slot")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("ReducerStates", "coinecta");
+                });
+
+            modelBuilder.Entity("Cardano.Sync.Data.Models.TransactionOutput", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<long>("Index")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Slot")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.HasKey("Id", "Index");
+
+                    b.HasIndex("Slot");
+
+                    b.ToTable("TransactionOutputs", "coinecta");
                 });
 
             modelBuilder.Entity("Coinecta.Data.Models.Reducers.StakePoolByAddress", b =>
@@ -114,29 +155,62 @@ namespace Coinecta.Data.Migrations
                     b.ToTable("StakeRequestByAddresses", "coinecta");
                 });
 
-            modelBuilder.Entity("Coinecta.Data.Models.TransactionOutput", b =>
+            modelBuilder.Entity("Cardano.Sync.Data.Models.TransactionOutput", b =>
                 {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
+                    b.OwnsOne("Cardano.Sync.Data.Models.Datum", "Datum", b1 =>
+                        {
+                            b1.Property<string>("TransactionOutputId")
+                                .HasColumnType("text");
 
-                    b.Property<long>("Index")
-                        .HasColumnType("bigint");
+                            b1.Property<long>("TransactionOutputIndex")
+                                .HasColumnType("bigint");
 
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasColumnType("text");
+                            b1.Property<byte[]>("Data")
+                                .IsRequired()
+                                .HasColumnType("bytea");
 
-                    b.Property<decimal>("Slot")
-                        .HasColumnType("numeric(20,0)");
+                            b1.Property<int>("Type")
+                                .HasColumnType("integer");
 
-                    b.HasKey("Id", "Index");
+                            b1.HasKey("TransactionOutputId", "TransactionOutputIndex");
 
-                    b.ToTable("TransactionOutputs", "coinecta");
+                            b1.ToTable("TransactionOutputs", "coinecta");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TransactionOutputId", "TransactionOutputIndex");
+                        });
+
+                    b.OwnsOne("Cardano.Sync.Data.Models.Value", "Amount", b1 =>
+                        {
+                            b1.Property<string>("TransactionOutputId")
+                                .HasColumnType("text");
+
+                            b1.Property<long>("TransactionOutputIndex")
+                                .HasColumnType("bigint");
+
+                            b1.Property<decimal>("Coin")
+                                .HasColumnType("numeric(20,0)");
+
+                            b1.Property<JsonElement>("MultiAssetJson")
+                                .HasColumnType("jsonb");
+
+                            b1.HasKey("TransactionOutputId", "TransactionOutputIndex");
+
+                            b1.ToTable("TransactionOutputs", "coinecta");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TransactionOutputId", "TransactionOutputIndex");
+                        });
+
+                    b.Navigation("Amount")
+                        .IsRequired();
+
+                    b.Navigation("Datum");
                 });
 
             modelBuilder.Entity("Coinecta.Data.Models.Reducers.StakePoolByAddress", b =>
                 {
-                    b.OwnsOne("Coinecta.Data.Models.Value", "Amount", b1 =>
+                    b.OwnsOne("Cardano.Sync.Data.Models.Value", "Amount", b1 =>
                         {
                             b1.Property<string>("StakePoolByAddressAddress")
                                 .HasColumnType("text");
@@ -170,7 +244,35 @@ namespace Coinecta.Data.Migrations
 
             modelBuilder.Entity("Coinecta.Data.Models.Reducers.StakePositionByStakeKey", b =>
                 {
-                    b.OwnsOne("Coinecta.Data.Models.Value", "Amount", b1 =>
+                    b.OwnsOne("Cardano.Sync.Data.Models.Datums.Rational", "Interest", b1 =>
+                        {
+                            b1.Property<string>("StakePositionByStakeKeyStakeKey")
+                                .HasColumnType("text");
+
+                            b1.Property<decimal>("StakePositionByStakeKeySlot")
+                                .HasColumnType("numeric(20,0)");
+
+                            b1.Property<string>("StakePositionByStakeKeyTxHash")
+                                .HasColumnType("text");
+
+                            b1.Property<decimal>("StakePositionByStakeKeyTxIndex")
+                                .HasColumnType("numeric(20,0)");
+
+                            b1.Property<decimal>("Denominator")
+                                .HasColumnType("numeric(20,0)");
+
+                            b1.Property<decimal>("Numerator")
+                                .HasColumnType("numeric(20,0)");
+
+                            b1.HasKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex");
+
+                            b1.ToTable("StakePositionByStakeKeys", "coinecta");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex");
+                        });
+
+                    b.OwnsOne("Cardano.Sync.Data.Models.Value", "Amount", b1 =>
                         {
                             b1.Property<string>("StakePositionByStakeKeyStakeKey")
                                 .HasColumnType("text");
@@ -200,11 +302,14 @@ namespace Coinecta.Data.Migrations
 
                     b.Navigation("Amount")
                         .IsRequired();
+
+                    b.Navigation("Interest")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Coinecta.Data.Models.Reducers.StakeRequestByAddress", b =>
                 {
-                    b.OwnsOne("Coinecta.Data.Models.Value", "Amount", b1 =>
+                    b.OwnsOne("Cardano.Sync.Data.Models.Value", "Amount", b1 =>
                         {
                             b1.Property<string>("StakeRequestByAddressAddress")
                                 .HasColumnType("text");
@@ -234,59 +339,6 @@ namespace Coinecta.Data.Migrations
 
                     b.Navigation("Amount")
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Coinecta.Data.Models.TransactionOutput", b =>
-                {
-                    b.OwnsOne("Coinecta.Data.Models.Datum", "Datum", b1 =>
-                        {
-                            b1.Property<string>("TransactionOutputId")
-                                .HasColumnType("text");
-
-                            b1.Property<long>("TransactionOutputIndex")
-                                .HasColumnType("bigint");
-
-                            b1.Property<byte[]>("Data")
-                                .IsRequired()
-                                .HasColumnType("bytea");
-
-                            b1.Property<int>("Type")
-                                .HasColumnType("integer");
-
-                            b1.HasKey("TransactionOutputId", "TransactionOutputIndex");
-
-                            b1.ToTable("TransactionOutputs", "coinecta");
-
-                            b1.WithOwner()
-                                .HasForeignKey("TransactionOutputId", "TransactionOutputIndex");
-                        });
-
-                    b.OwnsOne("Coinecta.Data.Models.Value", "Amount", b1 =>
-                        {
-                            b1.Property<string>("TransactionOutputId")
-                                .HasColumnType("text");
-
-                            b1.Property<long>("TransactionOutputIndex")
-                                .HasColumnType("bigint");
-
-                            b1.Property<decimal>("Coin")
-                                .HasColumnType("numeric(20,0)");
-
-                            b1.Property<JsonElement>("MultiAssetJson")
-                                .HasColumnType("jsonb");
-
-                            b1.HasKey("TransactionOutputId", "TransactionOutputIndex");
-
-                            b1.ToTable("TransactionOutputs", "coinecta");
-
-                            b1.WithOwner()
-                                .HasForeignKey("TransactionOutputId", "TransactionOutputIndex");
-                        });
-
-                    b.Navigation("Amount")
-                        .IsRequired();
-
-                    b.Navigation("Datum");
                 });
 #pragma warning restore 612, 618
         }
