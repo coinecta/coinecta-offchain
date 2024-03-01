@@ -10,6 +10,7 @@ using Coinecta.API.Models.Request;
 using Coinecta.API.Services;
 using Coinecta.Data.Models.Reducers;
 using CardanoSharp.Wallet.Utilities;
+using Coinecta.API;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +36,10 @@ builder.Services.AddScoped<TransactionBuildingService>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+{
+    options.SerializerOptions.Converters.Add(new UlongToStringConverter());
+});
 
 builder.Services.AddCors(options =>
 {

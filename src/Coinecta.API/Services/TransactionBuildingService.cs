@@ -83,7 +83,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         {
             Token = new()
             {
-                { stakePoolData.StakePool.AssetName, request.Amount }
+                { stakePoolData.StakePool.AssetName, (long)request.Amount }
             }
         });
 

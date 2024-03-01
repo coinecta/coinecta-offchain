@@ -7,5 +7,5 @@ public record AddStakeRequest
     public string DestinationAddress { get; init; } = default!;
     public int RewardSettingIndex { get; init; }
     public IEnumerable<string> WalletUtxoListCbor { get; init; } = default!;
-    public long Amount { get; init; }
+    public ulong Amount { get; init; }
 }
