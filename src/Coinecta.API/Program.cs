@@ -66,15 +66,74 @@ app.MapGet("/stake/pool/{address}/{ownerPkh}/{policyId}/{assetName}", async (
     string assetName
 ) => {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
-    List<Coinecta.Data.Models.Reducers.StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
+    List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
     return Results.Ok(
         stakePools
             .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(ownerPkh, StringComparison.InvariantCultureIgnoreCase))
-            .Where(sp => sp.Amount.MultiAsset.ContainsKey(policyId) && sp.Amount.MultiAsset[policyId].ContainsKey(assetName))
+            .Where(sp => sp.Amount.MultiAsset.ContainsKey(policyId.ToLowerInvariant()) && sp.Amount.MultiAsset[policyId].ContainsKey(assetName.ToLowerInvariant()))
             .First()
     );
 })
 .WithName("GetStakePool")
+.WithOpenApi();
+
+app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration, [FromBody] List<string> stakeKeys) =>
+{
+    if (stakeKeys.Count == 0)
+    {
+        return Results.BadRequest("No stake keys provided");
+    }
+
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
+    // Current Timestamp
+    DateTimeOffset dto = new(DateTime.UtcNow);
+    ulong currentTimestamp = (ulong)dto.ToUnixTimeMilliseconds();
+
+    // Get Stake Positions
+    List<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
+
+    // Filter Stake Positions
+    IEnumerable<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> lockedPositions = stakePositions.Where(sp => sp.LockTime > currentTimestamp);
+    IEnumerable<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> unclaimedPositions = stakePositions.Where(sp => sp.LockTime <= currentTimestamp);
+
+    // Transaform Stake Positions
+    StakeSummaryResponse result = new StakeSummaryResponse();
+
+    stakePositions.ForEach(sp =>
+    {
+        // Remove NFT
+        sp.Amount.MultiAsset.Remove(configuration["CoinectaStakeKeyPolicyId"]!);
+        bool isLocked = sp.LockTime > currentTimestamp;
+        string? policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
+        Dictionary<string, ulong> asset = sp.Amount.MultiAsset[policyId!];
+        string assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
+        ulong total = asset.Values.FirstOrDefault();
+
+        if (result.PoolStats.TryGetValue(assetNameAscii, out StakeStats? value))
+        {
+            value.TotalStaked += total;
+            value.TotalPortfolio += total;
+            value.UnclaimedTokens += isLocked ? 0 : total;
+        }
+        else
+        {
+            result.PoolStats[assetNameAscii] = new StakeStats
+            {
+                TotalStaked = total,
+                TotalPortfolio = total,
+                UnclaimedTokens = isLocked ? 0 : total
+            };
+        }
+
+        result.TotalStats.TotalStaked += total;
+        result.TotalStats.TotalPortfolio += total;
+        result.TotalStats.UnclaimedTokens += isLocked ? 0 : total;
+    });
+
+    return Results.Ok(result);
+})
+.WithName("GetStakeSummaryByStakeKeys")
 .WithOpenApi();
 
 app.MapPost("/stake/requests/", async (
