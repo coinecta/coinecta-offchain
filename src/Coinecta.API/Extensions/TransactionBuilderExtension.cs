@@ -15,6 +15,7 @@ public static class TransactionBuilderExtension
     public static Transaction BuildAndSetExUnits(this ITransactionBuilder builder, NetworkType networkType, List<IPlutusData>? datums = null)
     {
         Transaction tx = builder.Build();
+
         CsBindgen.TransactionEvaluation txEvalResults = CsBindgen.UPLCMethods.GetExUnits(tx, networkType);
 
         if (txEvalResults.Error != null)
