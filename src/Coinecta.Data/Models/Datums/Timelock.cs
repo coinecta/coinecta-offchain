@@ -36,7 +36,7 @@ public class TimelockCborConvert : ICborConvertor<Timelock>
     public void Write(ref CborWriter writer, Timelock value)
     {
         writer.WriteTag((CborTag)121);
-        writer.WriteStartArray(null);
+        writer.WriteStartArray(2);
         writer.WriteUInt64(value.Lockuntil);
         writer.WriteByteString(value.TimeLockKey);
         writer.WriteEndArray();
