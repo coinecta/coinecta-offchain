@@ -8,6 +8,8 @@ using Coinecta.API.Models.Response;
 using Coinecta.API.Models;
 using Coinecta.API.Models.Request;
 using Coinecta.API.Services;
+using Coinecta.Data.Models.Reducers;
+using CardanoSharp.Wallet.Utilities;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -56,7 +58,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapGet("/stake/pools/{address}/{ownerPkh}/{policyId}/{assetName}", async (
+app.MapGet("/stake/pool/{address}/{ownerPkh}/{policyId}/{assetName}", async (
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
     string address,
     string ownerPkh,
@@ -75,63 +77,30 @@ app.MapGet("/stake/pools/{address}/{ownerPkh}/{policyId}/{assetName}", async (
 .WithName("GetStakePool")
 .WithOpenApi();
 
-app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration, [FromBody] List<string> stakeKeys) =>
+app.MapPost("/stake/requests/", async (
+    IDbContextFactory<CoinectaDbContext> dbContextFactory, 
+    IConfiguration configuration, 
+    [FromBody] List<string> addresses,
+    [FromQuery] int page = 1,
+    [FromQuery] int limit = 10
+) =>
 {
-    if (stakeKeys.Count == 0)
-    {
-        return Results.BadRequest("No stake keys provided");
-    }
-
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
 
-    // Current Timestamp
-    DateTimeOffset dto = new(DateTime.UtcNow);
-    ulong currentTimestamp = (ulong)dto.ToUnixTimeMilliseconds();
+    int skip = (page - 1) * limit;
 
-    // Get Stake Positions
-    List<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
+    var pagedData = await dbContext.StakeRequestByAddresses
+        .Where(s => addresses.Contains(s.Address))
+        .Skip(skip) 
+        .Take(limit) 
+        .ToListAsync();
 
-    // Filter Stake Positions
-    IEnumerable<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> lockedPositions = stakePositions.Where(sp => sp.LockTime > currentTimestamp);
-    IEnumerable<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> unclaimedPositions = stakePositions.Where(sp => sp.LockTime <= currentTimestamp);
+    var totalCount = await dbContext.StakeRequestByAddresses
+                                    .CountAsync(s => addresses.Contains(s.Address));
 
-    // Transaform Stake Positions
-    StakeSummaryResponse result = new StakeSummaryResponse();
-
-    stakePositions.ForEach(sp =>
-    {
-        // Remove NFT
-        sp.Amount.MultiAsset.Remove(configuration["CoinectaStakeKeyPolicyId"]!);
-        bool isLocked = sp.LockTime > currentTimestamp;
-        string? policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
-        Dictionary<string, ulong> asset = sp.Amount.MultiAsset[policyId!];
-        string assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
-        ulong total = asset.Values.FirstOrDefault();
-
-        if (result.PoolStats.TryGetValue(assetNameAscii, out StakeStats? value))
-        {
-            value.TotalStaked += total;
-            value.TotalPortfolio += total;
-            value.UnclaimedTokens += isLocked ? 0 : total;
-        }
-        else
-        {
-            result.PoolStats[assetNameAscii] = new StakeStats
-            {
-                TotalStaked = total,
-                TotalPortfolio = total,
-                UnclaimedTokens = isLocked ? 0 : total
-            };
-        }
-
-        result.TotalStats.TotalStaked += total;
-        result.TotalStats.TotalPortfolio += total;
-        result.TotalStats.UnclaimedTokens += isLocked ? 0 : total;
-    });
-
-    return Results.Ok(result);
+    return Results.Ok(new { Total = totalCount, Data = pagedData });
 })
-.WithName("GetStakeSummaryByStakeKeys")
+.WithName("GetStakeRequestsByAddresses")
 .WithOpenApi();
 
 app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration, [FromBody] List<string> stakeKeys) =>
