@@ -84,7 +84,7 @@ public static class CoinectaUtils
     {
         string txHash = configuration["CoinectaStakePoolProxyScriptReferenceTxHash"]!;
         string txIndex = configuration["CoinectaStakePoolProxyScriptReferenceTxIndex"]!;
-        OutputReference txOutputRef = new OutputReference
+        OutputReference txOutputRef = new()
         {
             TxHash = txHash,
             Index = uint.Parse(txIndex)
@@ -100,7 +100,7 @@ public static class CoinectaUtils
     {
         string txHash = configuration["CoinectaStakePoolValidatorScriptReferenceTxHash"]!;
         string txIndex = configuration["CoinectaStakePoolValidatorScriptReferenceTxIndex"]!;
-        OutputReference txOutputRef = new OutputReference
+        OutputReference txOutputRef = new()
         {
             TxHash = txHash,
             Index = uint.Parse(txIndex)
@@ -116,7 +116,7 @@ public static class CoinectaUtils
     {
         string txHash = configuration["CoinectaTimeLockValidatorScriptReferenceTxHash"]!;
         string txIndex = configuration["CoinectaTimeLockValidatorScriptReferenceTxIndex"]!;
-        OutputReference txOutputRef = new OutputReference
+        OutputReference txOutputRef = new()
         {
             TxHash = txHash,
             Index = uint.Parse(txIndex)
@@ -132,7 +132,7 @@ public static class CoinectaUtils
     {
         string txHash = configuration["CoinectaStakeMintingValidatorReferenceTxHash"]!;
         string txIndex = configuration["CoinectaStakeMintingValidatorReferenceTxIndex"]!;
-        OutputReference txOutputRef = new OutputReference
+        OutputReference txOutputRef = new()
         {
             TxHash = txHash,
             Index = uint.Parse(txIndex)
@@ -188,7 +188,7 @@ public static class CoinectaUtils
         ulong trillion = 1000000000000;
         ulong quadrillion = 1000000000000000;
 
-        BigInteger amountDec = amount / BigInteger.Pow(ten, decimals);
+        BigInteger amountDec = BigInteger.Divide(amount, BigInteger.Pow(ten, decimals));
 
         switch (amountDec)
         {
