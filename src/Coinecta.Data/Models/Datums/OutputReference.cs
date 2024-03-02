@@ -18,10 +18,10 @@ public class OutputReferenceCborConvert : ICborConvertor<OutputReference>
         }
 
         reader.ReadStartArray(); // Start the outer array
-
+        reader.ReadStartArray(); // Start the inner array
         var transactionId = reader.ReadByteString();
+        reader.ReadEndArray(); // End the inner array
         var outputIndex = reader.ReadUInt64();
-
         reader.ReadEndArray(); // End the outer array
 
         return new OutputReference(transactionId, outputIndex);
@@ -31,8 +31,11 @@ public class OutputReferenceCborConvert : ICborConvertor<OutputReference>
     {
         writer.WriteTag((CborTag)121); // Adjust the tag number as necessary
 
-        writer.WriteStartArray(2); // Start the outer array
+        writer.WriteStartArray(null); // Start the outer array
+        writer.WriteTag((CborTag)121);
+        writer.WriteStartArray(null);
         writer.WriteByteString(value.TransactionId);
+        writer.WriteEndArray();
         writer.WriteUInt64(value.OutputIndex);
         writer.WriteEndArray(); // End the outer array
     }

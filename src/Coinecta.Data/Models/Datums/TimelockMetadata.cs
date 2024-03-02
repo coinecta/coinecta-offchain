@@ -51,7 +51,7 @@ public class TimelockMetadataCborConvert : ICborConvertor<TimelockMetadata>
 
         // Write the 'locked_amount' key-value pair
         writer.WriteByteString(Convert.FromHexString("6c6f636b65645f616d6f756e74")); // "locked_amount" in hex
-        writer.WriteByteString(BitConverter.GetBytes(value.LockedAmount));
+        writer.WriteByteString(Encoding.ASCII.GetBytes(value.LockedAmount.ToString()));
 
         // Write the 'name' key-value pair
         writer.WriteByteString(Convert.FromHexString("6e616d65")); // "name" in hex
