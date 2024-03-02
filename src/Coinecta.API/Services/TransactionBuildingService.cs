@@ -79,7 +79,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         // Validator output
         TransactionOutputValue stakePoolProxyOutputValue = new()
         {
-            Coin = 2_500_000,
+            Coin = 5_000_000,
             MultiAsset = []
         };
 
@@ -474,20 +474,30 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             .Where(s => s.TxHash == request.StakeRequestOutputReference.TxHash && s.TxIndex == request.StakeRequestOutputReference.Index)
             .FirstOrDefaultAsync() ?? throw new Exception("Stake request not found");
 
-        List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses
-            .Where(s => s.Address == request.StakePool.Address)
-            .OrderByDescending(s => s.Slot)
-            .ToListAsync();
+        StakePoolByAddress? stakePoolData = null;
 
-        StakePoolByAddress stakePoolData = stakePools
-            .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(request.StakePool.OwnerPkh, StringComparison.InvariantCultureIgnoreCase))
-            .Where(sp => sp.Amount.MultiAsset.ContainsKey(request.StakePool.PolicyId) && sp.Amount.MultiAsset[request.StakePool.PolicyId].ContainsKey(request.StakePool.AssetName))
-            .FirstOrDefault() ?? throw new Exception("Stake pool not found");
+        if (request.StakePoolData is not null)
+        {
+            stakePoolData = request.StakePoolData;
+        }
+        else
+        {
+            List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses
+                .Where(s => s.Address == request.StakePool.Address)
+                .OrderByDescending(s => s.Slot)
+                .ToListAsync();
+
+            stakePoolData = stakePools
+                .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(request.StakePool.OwnerPkh, StringComparison.InvariantCultureIgnoreCase))
+                .Where(sp => sp.Amount.MultiAsset.ContainsKey(request.StakePool.PolicyId) && sp.Amount.MultiAsset[request.StakePool.PolicyId].ContainsKey(request.StakePool.AssetName))
+                .FirstOrDefault() ?? throw new Exception("Stake pool not found");
+        }
 
         // Reference Scripts
         TransactionInput mintingRefInput = CoinectaUtils.GetStakeMintingValidatorScriptReferenceInput(configuration);
         TransactionInput proxyRefInput = CoinectaUtils.GetStakePoolProxyScriptReferenceInput(configuration);
         TransactionInput validatorRefInput = CoinectaUtils.GetStakePoolValidatorScriptReferenceInput(configuration);
+        TransactionInput timelockRefInput = CoinectaUtils.GetTimeLockValidatorScriptReferenceInput(configuration);
 
         // Asset
         byte[] stakePoolPolicyIdBytes = stakePoolData.StakePool.PolicyId;
@@ -501,21 +511,20 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         Rational stakeRequestRewardMultiplier = stakeRequestData.StakePoolProxy.RewardMultiplier;
         Rational stakeRequestAmountRational = new(stakeRequestAmount, 1);
         Rational stakeRequestTotalRewardRational = stakeRequestAmountRational * stakeRequestRewardMultiplier;
-        ulong stakeRequestTotalReward = stakeRequestTotalRewardRational.Numerator / stakeRequestTotalRewardRational.Denominator + stakeRequestAmount;
-        BigInteger stakeRewardTotalRewardWithDecimals = BigInteger.Pow(stakePoolData.StakePool.Decimals < 1 ? new BigInteger(1) : new BigInteger(stakePoolData.StakePool.Decimals), (int)stakeRequestTotalReward);
+        ulong stakeRequestTotalReward = stakeRequestTotalRewardRational.Numerator / stakeRequestTotalRewardRational.Denominator;
+        ulong rewardTotal = stakeRequestAmount + stakeRequestTotalReward;
+        BigInteger stakeRewardTotalRewardWithDecimals = BigInteger.Divide(rewardTotal, BigInteger.Pow(10, (int)stakePoolData.StakePool.Decimals));
         ulong stakePoolRemainingBalance = stakePoolBalance - stakeRequestTotalReward;
         int rewardIndex = stakePoolData.StakePool.RewardSettings.ToList().Select(r => r.RewardMultiplier).ToList().IndexOf(stakeRequestRewardMultiplier);
 
         // Addresses
         byte[] destinationPkh = stakeRequestData.StakePoolProxy.Destination.Address.Credential.Hash;
-        byte[] destinationStakePkh = stakeRequestData.StakePoolProxy.Destination.Address.Credential.Hash;
-        Address destinationAddress = AddressUtility.GetBaseAddress(destinationPkh, destinationStakePkh, NetworkType.Preview);
+        byte[]? destinationStakePkh = stakeRequestData.StakePoolProxy.Destination.Address.StakeCredential?.Credential.Hash;
+        Address destinationAddress = AddressUtility.GetBaseAddress(destinationPkh, destinationStakePkh!, NetworkType.Preview);
 
-        string? timeLockValidatorPkh = configuration["CoinectaTimeLockValidatorScriptHash"];
-        Address timeLockValidatorAddress = AddressUtility.GetEnterpriseAddress(Convert.FromHexString(timeLockValidatorPkh!), NetworkType.Preview);
-
-        string? stakePoolValidatorPkh = configuration["CoinectaStakePoolValidatorScriptHash"];
-        Address stakePoolValidatorAddress = AddressUtility.GetEnterpriseAddress(Convert.FromHexString(stakePoolValidatorPkh!), NetworkType.Preview);
+        Address timeLockValidatorAddress = CoinectaUtils.ValidatorAddress(timelockRefInput.Output!.ScriptReference!.PlutusV2Script!);
+        Address stakePoolValidatorAddress = CoinectaUtils.ValidatorAddress(validatorRefInput.Output!.ScriptReference!.PlutusV2Script!);
+        Address stakeProxyAddress = CoinectaUtils.ValidatorAddress(proxyRefInput.Output!.ScriptReference!.PlutusV2Script!);
 
         // Time
         ulong currentSlot = (await dbContext.Blocks.OrderByDescending(b => b.Slot).FirstAsync()).Slot - 100;
@@ -524,6 +533,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         ulong validTimeInMs = currentTimeMs + (1000 * 60 * 7);
         ulong lockTime = validTimeInMs + stakeRequestData.StakePoolProxy.LockTime;
         ulong validTimeSlot = (ulong)SlotUtility.GetSlotFromUnixTime(SlotUtility.Preview, (long)validTimeInMs / 1000);
+        ulong bufferDiff = validTimeInMs - currentTimeMs;
 
         // Metadata
         string abbreviatedReward = CoinectaUtils.AbbreviateAmount(stakeRewardTotalRewardWithDecimals, 0);
@@ -531,23 +541,24 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         string lockTimeDateString = CoinectaUtils.TimeToDateString((long)lockTime);
         string metadataName = $"Stake NFT {abbreviatedReward} {assetNameUtf8} - {lockTimeDateString}";
         var outputRefCbor = CborConverter.Serialize(new Data.Models.Datums.OutputReference(Convert.FromHexString(stakePoolData.TxHash), stakePoolData.TxIndex));
-        string stakeNftAssetName = Convert.ToHexString(HashUtility.Blake2b256(outputRefCbor))[..56].ToLower();
+        var outputRefCborHex = Convert.ToHexString(outputRefCbor).ToLower();
+        string stakeNftAssetName = Convert.ToHexString(HashUtility.Blake2b256(Convert.FromHexString(outputRefCborHex)))[..56].ToLower();
 
         // Timelock Metadata
-        TimelockMetadata metadata = new(stakeRequestTotalReward, Convert.ToHexString(Encoding.UTF8.GetBytes(metadataName)).ToLower());
-        string lockedAmountKey = Convert.ToHexString(Encoding.UTF8.GetBytes("locked_amount")).ToLower();
-        string metadataNameKey = Convert.ToHexString(Encoding.UTF8.GetBytes("name")).ToLower();
+        TimelockMetadata metadata = new(stakeRequestTotalReward + stakeRequestAmount, Convert.ToHexString(Encoding.UTF8.GetBytes(metadataName)).ToLower());
         string stakeMintingPolicy = configuration["CoinectaStakeMintingPolicyId"]!;
         string stakeKeyPrefix = configuration["StakeKeyPrefix"]!;
         string referenceKeyPrefix = configuration["ReferenceKeyPrefix"]!;
         string stakeKeyUnit = stakeMintingPolicy + stakeKeyPrefix + stakeNftAssetName;
 
         // Timelock
-        Timelock timelock = new(lockTime, Convert.FromHexString(stakeNftAssetName));
+        Timelock timelock = new(lockTime, Convert.FromHexString(stakeKeyUnit));
 
         // Build transaction
         ITransactionBodyBuilder txBodyBuilder = TransactionBodyBuilder.Create;
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
+
+        ulong attachedCoin = stakeRequestData.Amount.Coin;
 
         // Validity Interval
         txBodyBuilder.SetValidBefore((uint)validTimeSlot);
@@ -573,7 +584,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             Address = stakePoolValidatorAddress.GetBytes(),
             Value = new TransactionOutputValue()
             {
-                Coin = stakePoolRemainingBalance,
+                Coin = stakePoolData.Amount.Coin,
                 MultiAsset = stakePoolTokenBundle.Build()
             },
             DatumOption = new DatumOption()
@@ -594,7 +605,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         };
         var stakeProxyOutput = new TransactionOutput()
         {
-            Address = timeLockValidatorAddress.GetBytes(),
+            Address = stakeProxyAddress.GetBytes(),
             Value = new TransactionOutputValue()
             {
                 Coin = stakeRequestData.Amount.Coin,
@@ -616,24 +627,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
 
         txBodyBuilder.SetMint(mintAssets);
 
-        // Timelock Output
-        ITokenBundleBuilder timelockTokenBundle = TokenBundleBuilder.Create;
-        timelockTokenBundle.AddToken(stakePoolPolicyIdBytes, stakePoolAssetNameBytes, (long)stakeRequestTotalReward);
-        timelockTokenBundle.AddToken(Convert.FromHexString(stakeMintingPolicy), Convert.FromHexString(referenceKeyPrefix + stakeNftAssetName), 1);
-        txBodyBuilder.AddOutput(new TransactionOutput()
-        {
-            Address = timeLockValidatorAddress.GetBytes(),
-            Value = new TransactionOutputValue()
-            {
-                Coin = 2_000_000,
-                MultiAsset = timelockTokenBundle.Build()
-            },
-            DatumOption = new()
-            {
-                RawData = timeLockDatum
-            }
-        });
-
         // Stake Pool Output
         ITokenBundleBuilder stakePoolRemainingTokens = TokenBundleBuilder.Create;
         stakePoolRemainingTokens.AddToken(stakePoolPolicyIdBytes, stakePoolAssetNameBytes, (long)stakePoolRemainingBalance);
@@ -651,46 +644,25 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             }
         });
 
-        // Batcher Output 
-        var walletUtxos = CoinectaUtils.ConvertUtxoListCbor(request.WalletUtxoListCbor).ToList();
-        Address changeAddress = new(walletUtxos.First().OutputAddress);
-        var batchingCertificatePolicyId = configuration["CoinectaBatchingCertificatePolicyId"]!;
-        var batchingCertificateAssetName = configuration["CoinectaBatchingCertificateAssetName"]!;
-
-        ITokenBundleBuilder batcherTokenBundle = TokenBundleBuilder.Create;
-        batcherTokenBundle.AddToken(Convert.FromHexString(batchingCertificatePolicyId), Convert.FromHexString(batchingCertificateAssetName), 1);
-
-        var batcherCertificateOutput = new TransactionOutput()
+        // Timelock Output
+        ITokenBundleBuilder timelockTokenBundle = TokenBundleBuilder.Create;
+        timelockTokenBundle.AddToken(stakePoolPolicyIdBytes, stakePoolAssetNameBytes, (long)stakeRequestTotalReward + (long)stakeRequestAmount);
+        timelockTokenBundle.AddToken(Convert.FromHexString(stakeMintingPolicy), Convert.FromHexString(referenceKeyPrefix + stakeNftAssetName), 1);
+        txBodyBuilder.AddOutput(new TransactionOutput()
         {
-            Address = changeAddress.GetBytes(),
+            Address = timeLockValidatorAddress.GetBytes(),
             Value = new TransactionOutputValue()
             {
-                Coin = 2_000_000,
-                MultiAsset = batcherTokenBundle.Build()
-            }
-        };
-        var batcherCoinSelectionResult = CoinectaUtils.GetCoinSelection([batcherCertificateOutput], walletUtxos, changeAddress.ToString(), limit: 2);
-        var batcherInputs = batcherCoinSelectionResult.SelectedUtxos.ToList();
-        batcherInputs.ForEach(input => txBodyBuilder.AddInput(input));
-
-        // Collateral Input
-        batcherInputs.ForEach(input => walletUtxos.Remove(input));
-        var collateralOutput = new TransactionOutput()
-        {
-            Address = changeAddress.GetBytes(),
-            Value = new TransactionOutputValue()
+                Coin = 2_200_000,
+                MultiAsset = timelockTokenBundle.Build()
+            },
+            DatumOption = new()
             {
-                Coin = 5_000_000,
-                MultiAsset = []
+                RawData = timeLockDatum
             }
-        };
-        var batcherCollateralCoinSelectionResult = CoinectaUtils.GetCoinSelection([collateralOutput], walletUtxos, changeAddress.ToString(), limit: 3);
-        var collateralInputs = batcherCollateralCoinSelectionResult.Inputs;
+        });
 
-        collateralInputs.ForEach(input => txBodyBuilder.AddCollateralInput(input));
-
-        var batcherChangeOutputs = batcherCoinSelectionResult.ChangeOutputs;
-        batcherChangeOutputs.ForEach(output => txBodyBuilder.AddOutput(output));
+        attachedCoin -= 2_200_000;
 
         // Destination Output
         ITokenBundleBuilder walletTokenBundle = TokenBundleBuilder.Create;
@@ -705,6 +677,52 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             }
         });
 
+        attachedCoin -= 1_500_000;
+
+        // Batcher Output 
+        var walletUtxos = CoinectaUtils.ConvertUtxoListCbor(request.WalletUtxoListCbor).ToList();
+        Address changeAddress = new(walletUtxos.First().OutputAddress);
+        var batchingCertificatePolicyId = configuration["CoinectaBatchingCertificatePolicyId"]!;
+        var batchingCertificateAssetName = configuration["CoinectaBatchingCertificateAssetName"]!;
+
+        ITokenBundleBuilder batcherTokenBundle = TokenBundleBuilder.Create;
+        batcherTokenBundle.AddToken(Convert.FromHexString(batchingCertificatePolicyId), Convert.FromHexString(batchingCertificateAssetName), 1);
+
+        var batcherCertificateOutput = new TransactionOutput()
+        {
+            Address = changeAddress.GetBytes(),
+            Value = new TransactionOutputValue()
+            {
+                MultiAsset = batcherTokenBundle.Build()
+            }
+        };
+        var batcherCoinSelectionResult = CoinectaUtils.GetCoinSelection([batcherCertificateOutput], walletUtxos, changeAddress.ToString(), limit: 1);
+        var batcherInput = batcherCoinSelectionResult.Inputs.First();
+        txBodyBuilder.AddInput(batcherInput);
+
+        if (attachedCoin <= 500_000)
+        {
+            throw new Exception("Stake request did not have enough funds to cover the transaction fees.");
+        }
+
+        batcherInput.Output!.Value.Coin += attachedCoin;
+        txBodyBuilder.AddOutput(batcherInput.Output!);
+
+        // Collateral Input
+        walletUtxos.Remove(batcherCoinSelectionResult.SelectedUtxos.First());
+        var collateralOutput = new TransactionOutput()
+        {
+            Address = changeAddress.GetBytes(),
+            Value = new TransactionOutputValue()
+            {
+                Coin = 5_000_000,
+                MultiAsset = []
+            }
+        };
+        var batcherCollateralCoinSelectionResult = CoinectaUtils.GetCoinSelection([collateralOutput], walletUtxos, changeAddress.ToString(), limit: 3);
+        var collateralInputs = batcherCollateralCoinSelectionResult.Inputs;
+        collateralInputs.ForEach(input => txBodyBuilder.AddCollateralInput(input));
+
         // Add Redeemer Indices
         List<TransactionInput> txInputs = [.. txBodyBuilder.Build().TransactionInputs];
         List<string> txInputOutrefs = txInputs.Select(i => (Convert.ToHexString(i.TransactionId) + i.TransactionIndex).ToLower()).ToList();
@@ -717,22 +735,22 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             .SetTag(RedeemerTag.Spend)
             .SetIndex((uint)stakeProxyIndex)
             .SetPlutusData(CBORObject.DecodeFromBytes(CborConvertor.Serialize(new NoDatum())).GetPlutusData())
-            .SetExUnits(new ExUnits { Mem = 0, Steps = 0 }) as RedeemerBuilder;
+            .SetExUnits(new ExUnits { Mem = 730096, Steps = 268541674 }) as RedeemerBuilder;
 
         RedeemerBuilder? stakePoolRedeemer = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Spend)
             .SetIndex((uint)stakePoolIndex)
             .SetPlutusData(CBORObject.DecodeFromBytes(CborConvertor.Serialize(new StakePoolRedeemer((ulong)rewardIndex))).GetPlutusData())
-            .SetExUnits(new ExUnits { Mem = 0, Steps = 0 }) as RedeemerBuilder;
+            .SetExUnits(new ExUnits { Mem = 730096, Steps = 268541674 }) as RedeemerBuilder;
 
         RedeemerBuilder? mintRedeemer = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Mint)
             .SetIndex(0)
-            .SetPlutusData(CBORObject.DecodeFromBytes(CborConvertor.Serialize(new StakeKeyMintRedeemer((ulong)stakePoolIndex, 0))).GetPlutusData())
-            .SetExUnits(new ExUnits { Mem = 0, Steps = 0 }) as RedeemerBuilder;
+            .SetPlutusData(CBORObject.DecodeFromBytes(CborConvertor.Serialize(new StakeKeyMintRedeemer((ulong)stakePoolIndex, 1))).GetPlutusData())
+            .SetExUnits(new ExUnits { Mem = 730096, Steps = 268541674 }) as RedeemerBuilder;
 
         txBodyBuilder.SetScriptDataHash(
-            [stakeProxyRedeemer!.Build(), stakePoolRedeemer!.Build(), mintRedeemer!.Build()],
+            [stakePoolRedeemer!.Build(), stakeProxyRedeemer!.Build(), mintRedeemer!.Build()],
             [],
             CostModelUtility.PlutusV2CostModel.Serialize());
 
@@ -745,8 +763,8 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         Transaction tx = txBuilder
             .SetBody(txBodyBuilder)
             .SetWitnesses(txWitnesssetBuilder)
-            .Build();
-        //.BuildAndSetExUnits(NetworkType.Preview);
+            //.Build();
+            .BuildAndSetExUnits(NetworkType.Preview);
 
         uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
         tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
