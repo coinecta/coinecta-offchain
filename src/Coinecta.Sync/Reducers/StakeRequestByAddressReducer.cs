@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using PallasDotnet.Models;
 using Address = CardanoSharp.Wallet.Models.Addresses.Address;
 using Cardano.Sync.Data.Models.Datums;
+using CardanoSharp.Wallet.Utilities;
+using CardanoSharp.Wallet.Enums;
 
 namespace Coinecta.Sync.Reducers;
 
@@ -113,17 +115,20 @@ public class StakeRequestByAddressReducer(
                             var datum = output.Datum.Data;
                             try
                             {
-                                var stakePoolDatum = CborConverter.Deserialize<StakePoolProxy<NoDatum>>(datum);
+                                var stakeProxyDatum = CborConverter.Deserialize<StakePoolProxy<NoDatum>>(datum);
                                 var entityUtxo = Utils.MapTransactionOutputEntity(txBody.Id.ToHex(), response.Block.Slot, output);
                                 var stakeRequestByAddress = new StakeRequestByAddress
                                 {
-                                    Address = addressBech32,
+                                    Address = AddressUtility.GetBaseAddress(
+                                        stakeProxyDatum.Destination.Address.Credential.Hash, 
+                                        stakeProxyDatum.Destination.Address.StakeCredential!.Credential.Hash,
+                                        configuration.GetValue<NetworkType>("CardanoNetworkMagic")).ToString(),
                                     Slot = response.Block.Slot,
                                     TxHash = txBody.Id.ToHex(),
                                     TxIndex = output.Index,
                                     Amount = entityUtxo.Amount,
                                     Status = StakeRequestStatus.Pending,
-                                    StakePoolProxy = stakePoolDatum
+                                    StakePoolProxy = stakeProxyDatum
                                 };
 
                                 _dbContext.StakeRequestByAddresses.Add(stakeRequestByAddress);
