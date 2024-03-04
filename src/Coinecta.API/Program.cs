@@ -69,7 +69,8 @@ app.MapGet("/stake/pool/{address}/{ownerPkh}/{policyId}/{assetName}", async (
     string ownerPkh,
     string policyId,
     string assetName
-) => {
+) =>
+{
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
     List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
     return Results.Ok(
@@ -142,8 +143,8 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
 .WithOpenApi();
 
 app.MapPost("/stake/requests/", async (
-    IDbContextFactory<CoinectaDbContext> dbContextFactory, 
-    IConfiguration configuration, 
+    IDbContextFactory<CoinectaDbContext> dbContextFactory,
+    IConfiguration configuration,
     [FromBody] List<string> addresses,
     [FromQuery] int page = 1,
     [FromQuery] int limit = 10
@@ -155,8 +156,8 @@ app.MapPost("/stake/requests/", async (
 
     var pagedData = await dbContext.StakeRequestByAddresses
         .Where(s => addresses.Contains(s.Address))
-        .Skip(skip) 
-        .Take(limit) 
+        .Skip(skip)
+        .Take(limit)
         .ToListAsync();
 
     var totalCount = await dbContext.StakeRequestByAddresses
@@ -272,6 +273,21 @@ app.MapPost("/transaction/stake/claim", async (TransactionBuildingService txBuil
     }
 })
 .WithName("ClaimStakeTransaction")
+.WithOpenApi();
+
+app.MapPost("/transaction/stake/execute", async (TransactionBuildingService txBuildingService, [FromBody] ExecuteStakeRequest request) =>
+{
+    try
+    {
+        string result = await txBuildingService.ExecuteStakeAsync(request);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+})
+.WithName("ExecuteStakeTransaction")
 .WithOpenApi();
 
 app.UseCors();

@@ -14,6 +14,8 @@ using Coinecta.API.Models;
 using CardanoSharp.Wallet.CIPs.CIP2.Models;
 using CardanoSharp.Wallet.CIPs.CIP2;
 using CardanoSharp.Wallet.CIPs.CIP2.ChangeCreationStrategies;
+using CardanoSharp.Wallet.Extensions;
+using System.Numerics;
 
 namespace Coinecta.API.Utils;
 
@@ -82,7 +84,7 @@ public static class CoinectaUtils
     {
         string txHash = configuration["CoinectaStakePoolProxyScriptReferenceTxHash"]!;
         string txIndex = configuration["CoinectaStakePoolProxyScriptReferenceTxIndex"]!;
-        OutputReference txOutputRef = new OutputReference
+        OutputReference txOutputRef = new()
         {
             TxHash = txHash,
             Index = uint.Parse(txIndex)
@@ -98,7 +100,7 @@ public static class CoinectaUtils
     {
         string txHash = configuration["CoinectaStakePoolValidatorScriptReferenceTxHash"]!;
         string txIndex = configuration["CoinectaStakePoolValidatorScriptReferenceTxIndex"]!;
-        OutputReference txOutputRef = new OutputReference
+        OutputReference txOutputRef = new()
         {
             TxHash = txHash,
             Index = uint.Parse(txIndex)
@@ -114,7 +116,7 @@ public static class CoinectaUtils
     {
         string txHash = configuration["CoinectaTimeLockValidatorScriptReferenceTxHash"]!;
         string txIndex = configuration["CoinectaTimeLockValidatorScriptReferenceTxIndex"]!;
-        OutputReference txOutputRef = new OutputReference
+        OutputReference txOutputRef = new()
         {
             TxHash = txHash,
             Index = uint.Parse(txIndex)
@@ -130,7 +132,7 @@ public static class CoinectaUtils
     {
         string txHash = configuration["CoinectaStakeMintingValidatorReferenceTxHash"]!;
         string txIndex = configuration["CoinectaStakeMintingValidatorReferenceTxIndex"]!;
-        OutputReference txOutputRef = new OutputReference
+        OutputReference txOutputRef = new()
         {
             TxHash = txHash,
             Index = uint.Parse(txIndex)
@@ -157,5 +159,77 @@ public static class CoinectaUtils
             .GetCoinSelection(outputs, utxos, changeAddress, mint, requiredUtxos, limit, feeBuffer);
 
         return result;
+    }
+
+    public static ITokenBundleBuilder GetTokenBundleFromAmount(Dictionary<string, Dictionary<string, ulong>> amount)
+    {
+        ITokenBundleBuilder multiAssetBuilder = TokenBundleBuilder.Create;
+        amount.Keys.ToList().ForEach((policyId) =>
+        {
+            Dictionary<string, ulong> asset = amount[policyId];
+            asset.Keys.ToList().ForEach((assetName) =>
+            {
+                byte[] policyIdBytes = Convert.FromHexString(policyId);
+                byte[] assetNameBytes = Convert.FromHexString(assetName);
+
+                multiAssetBuilder.AddToken(policyIdBytes, assetNameBytes, (long)asset[assetName]);
+            });
+        });
+
+        return multiAssetBuilder;
+    }
+
+    public static string AbbreviateAmount(BigInteger amount, int decimals)
+    {
+        ulong ten = 10;
+        ulong thousand = 1000;
+        ulong million = 1000000;
+        ulong billion = 1000000000;
+        ulong trillion = 1000000000000;
+        ulong quadrillion = 1000000000000000;
+
+        BigInteger amountDec = BigInteger.Divide(amount, BigInteger.Pow(ten, decimals));
+
+        switch (amountDec)
+        {
+            case var _ when amountDec >= quadrillion:
+                BigInteger quadrillions = amountDec / quadrillion;
+                return quadrillions > 999 ? "***Q" : $"{quadrillions}Q";
+            case var _ when amountDec >= trillion:
+                BigInteger trillions = amountDec / trillion;
+                return $"{trillions}T";
+            case var _ when amountDec >= billion:
+                BigInteger billions = amountDec / billion;
+                return $"{billions}B";
+            case var _ when amountDec >= million:
+                BigInteger millions = amountDec / million;
+                return $"{millions}M";
+            case var _ when amountDec >= thousand:
+                BigInteger thousands = amountDec / thousand;
+                return $"{thousands}K";
+            default:
+                return amountDec.ToString();
+        }
+    }
+
+    public static string TimeToDateString(long time)
+    {
+        long s = time / 1000;
+        long z = s / 86400 + 719468;
+        long era = (z >= 0 ? z : z - 146096) / 146097;
+        long doe = z - era * 146097;
+        long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        long y = yoe + era * 400;
+        long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        long mp = (5 * doy + 2) / 153;
+        long d = doy - (153 * mp + 2) / 5 + 1;
+        long m = mp + (mp < 10 ? 3 : -9);
+        long adjustedY = y + (m <= 2 ? 1 : 0);
+
+        string yearString = adjustedY.ToString().Substring(Math.Max(0, adjustedY.ToString().Length - 2)); // Get last two digits of the year
+        string monthString = (m < 10 ? "0" : "") + m.ToString();
+        string dayString = (d < 10 ? "0" : "") + d.ToString();
+
+        return yearString + monthString + dayString;
     }
 }
