@@ -1,5 +1,7 @@
+using Cardano.Sync.Data.Models.Datums;
 using CborSerialization;
 using Coinecta.Data.Models.Datums;
+using StakeCredential = Cardano.Sync.Data.Models.Datums.StakeCredential;
 
 namespace Coinecta.Tests;
 
@@ -24,7 +26,7 @@ public class CborTests
     [Fact]
     public void RewardSettingCborTest()
     {
-        var rewardSetting = CborConverter.Deserialize<RewardSetting>(Convert.FromHexString("d8799f1864d8799f051864ffff"));
+        var rewardSetting = CborConverter.Deserialize<Cardano.Sync.Data.Models.Datums.RewardSetting>(Convert.FromHexString("d8799f1864d8799f051864ffff"));
         var rewardSettingCborHex = Convert.ToHexString(CborConverter.Serialize(rewardSetting)).ToLowerInvariant();
         Assert.Equal("d8799f1864d8799f051864ffff", rewardSettingCborHex);
     }
