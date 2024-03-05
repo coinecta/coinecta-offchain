@@ -1,4 +1,4 @@
-namespace Coinecta.API.Models.Request;
+namespace Coinecta.Data.Models.Api.Request;
 
 public record CancelStakeRequest
 {

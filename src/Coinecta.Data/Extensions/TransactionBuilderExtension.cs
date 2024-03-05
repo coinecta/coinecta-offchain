@@ -7,7 +7,7 @@ using CardanoSharp.Wallet.Models.Transactions.TransactionWitness.PlutusScripts;
 using CardanoSharp.Wallet.TransactionBuilding;
 using CardanoSharp.Wallet.Utilities;
 
-namespace Coinecta.API.Extensions;
+namespace Coinecta.Data.Extensions;
 
 public static class TransactionBuilderExtension
 {
