@@ -154,7 +154,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             TransactionIndex = (uint)request.StakeRequestOutputReference.Index,
             Output = new()
             {
-                Address = new Address(stakeRequestData.Address).GetBytes(),
+                Address = new Address(configuration["CoinectaStakePoolProxyAddress"]!).GetBytes(),
                 Value = walletOutputValue,
                 DatumOption = new()
                 {
@@ -455,7 +455,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
         txBuilder.SetBody(txBodyBuilder);
         txBuilder.SetWitnesses(txWitnesssetBuilder);
-
 
         Transaction tx = txBuilder.BuildAndSetExUnits(NetworkType.Preview);
         uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);

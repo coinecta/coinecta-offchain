@@ -16,6 +16,7 @@ using CardanoSharp.Wallet.CIPs.CIP2;
 using CardanoSharp.Wallet.CIPs.CIP2.ChangeCreationStrategies;
 using CardanoSharp.Wallet.Extensions;
 using System.Numerics;
+using CardanoSharp.Wallet.Common;
 
 namespace Coinecta.API.Utils;
 
@@ -232,4 +233,14 @@ public static class CoinectaUtils
 
         return yearString + monthString + dayString;
     }
+
+    public static SlotNetworkConfig SlotUtilityFromNetwork(NetworkType networkType) => networkType switch
+    {
+        NetworkType.Mainnet => SlotUtility.Mainnet,
+        NetworkType.Preview => SlotUtility.Preview,
+        NetworkType.Preprod => SlotUtility.Preprod,
+        _ => throw new NotImplementedException()
+    };
+
+    public static long TimeFromSlot(NetworkType network, long slot) => SlotUtility.GetPosixTimeSecondsFromSlot(CoinectaUtils.SlotUtilityFromNetwork(network), slot);
 }
