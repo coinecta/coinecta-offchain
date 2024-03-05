@@ -1,16 +1,13 @@
 using System.Text;
-using System.Text.Unicode;
 using Coinecta.Data;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Coinecta.API.Models.Response;
-using Coinecta.API.Models;
-using Coinecta.API.Models.Request;
-using Coinecta.API.Services;
 using Coinecta.Data.Models.Reducers;
-using CardanoSharp.Wallet.Utilities;
 using Coinecta.API;
+using Coinecta.Data.Models.Response;
+using Coinecta.Data.Models.Api;
+using Coinecta.Data.Models.Api.Request;
+using Coinecta.Data.Services;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -97,14 +94,14 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
     ulong currentTimestamp = (ulong)dto.ToUnixTimeMilliseconds();
 
     // Get Stake Positions
-    List<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
+    List<StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
 
     // Filter Stake Positions
-    IEnumerable<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> lockedPositions = stakePositions.Where(sp => sp.LockTime > currentTimestamp);
-    IEnumerable<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> unclaimedPositions = stakePositions.Where(sp => sp.LockTime <= currentTimestamp);
+    IEnumerable<StakePositionByStakeKey> lockedPositions = stakePositions.Where(sp => sp.LockTime > currentTimestamp);
+    IEnumerable<StakePositionByStakeKey> unclaimedPositions = stakePositions.Where(sp => sp.LockTime <= currentTimestamp);
 
     // Transaform Stake Positions
-    StakeSummaryResponse result = new StakeSummaryResponse();
+    StakeSummaryResponse result = new();
 
     stakePositions.ForEach(sp =>
     {
