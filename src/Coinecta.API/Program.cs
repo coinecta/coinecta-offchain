@@ -287,6 +287,21 @@ app.MapPost("/transaction/stake/execute", async (TransactionBuildingService txBu
 .WithName("ExecuteStakeTransaction")
 .WithOpenApi();
 
+app.MapGet("/transaction/utxos", async (IDbContextFactory<CoinectaDbContext> dbContextFactory) =>
+{
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+    var result = await dbContext.UtxosByAddress
+        .Where(u => u.Address == "addr_test1qpg007fw5caetatd8gxcyt6d08lzteh9afk5smfd9hr60l72udjv5rtpfksjl64zeay5f2gpj6st0tl8m400nq8hjp9suxaw6c")
+        .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
+        .Where(g => g.Count() < 2)
+        .Select(g => g.First())
+        .ToListAsync();
+
+    return Results.Ok(result);
+})
+.WithName("GetUtxos")
+.WithOpenApi();
+
 app.UseCors();
 
 app.Run();
