@@ -16,6 +16,7 @@ public class CoinectaDbContext
     public DbSet<StakePoolByAddress> StakePoolByAddresses { get; set; }
     public DbSet<StakeRequestByAddress> StakeRequestByAddresses { get; set; }
     public DbSet<StakePositionByStakeKey> StakePositionByStakeKeys { get; set; }
+    public DbSet<UtxoByAddress> UtxosByAddress { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +27,7 @@ public class CoinectaDbContext
         modelBuilder.Entity<StakePositionByStakeKey>().HasKey(item => new { item.StakeKey, item.Slot, item.TxHash, item.TxIndex });
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Amount);
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Interest);
+        modelBuilder.Entity<UtxoByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex, item.Status });
         base.OnModelCreating(modelBuilder);
     }
 }
