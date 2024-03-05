@@ -9,7 +9,6 @@ using CardanoSharp.Wallet.Models.Transactions.TransactionWitness.PlutusScripts;
 using CardanoSharp.Wallet.TransactionBuilding;
 using CardanoSharp.Wallet.Utilities;
 using Coinecta.Data.Utils;
-using Coinecta.Data;
 using Coinecta.Data.Models.Datums;
 using Coinecta.Data.Models.Reducers;
 using Microsoft.EntityFrameworkCore;
@@ -152,7 +151,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             TransactionIndex = (uint)request.StakeRequestOutputReference.Index,
             Output = new()
             {
-                Address = new Address(stakeRequestData.Address).GetBytes(),
+                Address = new Address(configuration["CoinectaStakePoolProxyAddress"]!).GetBytes(),
                 Value = walletOutputValue,
                 DatumOption = new()
                 {
@@ -187,6 +186,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             .GetCoinSelection([collateralOutput], walletUtxos, changeAddress.ToString(), limit: 1)
                 ?? throw new Exception("Coin selection failed");
         TransactionInput collateralInput = coinSelectionResult.Inputs.First();
+
 
         RedeemerBuilder? redeemerBuilder = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Spend)
@@ -478,7 +478,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         else
         {
             stakeRequestData = await dbContext.StakeRequestByAddresses
-                .Where(s => s.TxHash == request.StakeRequestOutputReference.TxHash && s.TxIndex == request.StakeRequestOutputReference.Index)
+                .Where(s => s.TxHash == request.StakeRequestOutputReference!.TxHash && s.TxIndex == request.StakeRequestOutputReference.Index)
                 .FirstOrDefaultAsync() ?? throw new Exception("Stake request not found");
         }
 
@@ -493,13 +493,13 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         else
         {
             List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses
-                .Where(s => s.Address == request.StakePool.Address)
+                .Where(s => s.Address == request.StakePool!.Address)
                 .OrderByDescending(s => s.Slot)
                 .ToListAsync();
 
             stakePoolData = stakePools
                 .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(request.StakePool.OwnerPkh, StringComparison.InvariantCultureIgnoreCase))
-                .Where(sp => sp.Amount.MultiAsset.ContainsKey(request.StakePool.PolicyId) && sp.Amount.MultiAsset[request.StakePool.PolicyId].ContainsKey(request.StakePool.AssetName))
+                .Where(sp => sp.Amount.MultiAsset.ContainsKey(request.StakePool!.PolicyId) && sp.Amount.MultiAsset[request.StakePool.PolicyId].ContainsKey(request.StakePool.AssetName))
                 .FirstOrDefault() ?? throw new Exception("Stake pool not found");
         }
 
