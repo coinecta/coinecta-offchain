@@ -16,6 +16,9 @@ using CardanoSharp.Wallet.CIPs.CIP2.ChangeCreationStrategies;
 using System.Numerics;
 using Coinecta.Data.Models;
 using Microsoft.Extensions.Configuration;
+using Coinecta.Data.Migrations;
+using Coinecta.Data.Models.Reducers;
+using UtxoByAddress = Coinecta.Data.Models.Reducers.UtxoByAddress;
 
 namespace Coinecta.Data.Utils;
 
@@ -182,6 +185,57 @@ public static class CoinectaUtils
         });
 
         return multiAssetBuilder;
+    }
+
+    public static List<Asset> ConvertNativeAssetToBalanceAsset(Dictionary<byte[], NativeAsset> multiAsset)
+    {
+        if (multiAsset == null)
+        {
+            return [];
+        }
+
+        List<Asset> balanceAssets = [];
+        multiAsset.Keys.ToList().ForEach((policyId) =>
+        {
+            string policyIdHex = Convert.ToHexString(policyId).ToLowerInvariant();
+            var asset = multiAsset[policyId];
+            asset.Token.Keys.ToList().ForEach(assetName =>
+            {
+                string assetNameHex = Convert.ToHexString(assetName).ToLowerInvariant();
+                ulong amount = (ulong)asset.Token[assetName];
+                balanceAssets.Add(new Asset
+                {
+                    PolicyId = policyIdHex,
+                    Name = assetNameHex,
+                    Quantity = (long)amount
+                });
+            });
+        });
+
+        return balanceAssets;
+    }
+
+    public static List<Utxo> ConvertUtxosByAddressToUtxo(List<UtxoByAddress> utxosByAddress)
+    {
+        List<Utxo> resolvedUtxos = utxosByAddress
+            .Select(u =>
+            {
+                var resolvedOutput = ConvertTxOutputCbor(Convert.ToHexString(u.TxOutCbor!));
+                return new Utxo()
+                {
+                    TxHash = u.TxHash,
+                    TxIndex = (uint)u.TxIndex,
+                    OutputAddress = u.Address,
+                    Balance = new()
+                    {
+                        Lovelaces = resolvedOutput.Value.Coin,
+                        Assets = ConvertNativeAssetToBalanceAsset(resolvedOutput.Value.MultiAsset)
+                    }
+                };
+            })
+            .ToList();
+
+        return resolvedUtxos;
     }
 
     public static string AbbreviateAmount(BigInteger amount, int decimals)
