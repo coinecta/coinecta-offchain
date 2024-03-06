@@ -3,6 +3,7 @@ using System.Text.Json;
 using Coinecta.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    partial class CoinectaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240305143351_UtxoByAddressNullableTxOutCbor")]
+    partial class UtxoByAddressNullableTxOutCbor
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -94,13 +97,10 @@ namespace Coinecta.Data.Migrations
                     b.Property<decimal>("TxIndex")
                         .HasColumnType("numeric(20,0)");
 
-                    b.Property<int>("UtxoStatus")
-                        .HasColumnType("integer");
-
                     b.Property<JsonElement>("StakePoolJson")
                         .HasColumnType("jsonb");
 
-                    b.HasKey("Address", "Slot", "TxHash", "TxIndex", "UtxoStatus");
+                    b.HasKey("Address", "Slot", "TxHash", "TxIndex");
 
                     b.ToTable("StakePoolByAddresses", "coinecta");
                 });
@@ -119,16 +119,13 @@ namespace Coinecta.Data.Migrations
                     b.Property<decimal>("TxIndex")
                         .HasColumnType("numeric(20,0)");
 
-                    b.Property<int>("UtxoStatus")
-                        .HasColumnType("integer");
-
                     b.Property<decimal>("LockTime")
                         .HasColumnType("numeric(20,0)");
 
                     b.Property<JsonElement>("StakePositionJson")
                         .HasColumnType("jsonb");
 
-                    b.HasKey("StakeKey", "Slot", "TxHash", "TxIndex", "UtxoStatus");
+                    b.HasKey("StakeKey", "Slot", "TxHash", "TxIndex");
 
                     b.ToTable("StakePositionByStakeKeys", "coinecta");
                 });
@@ -252,21 +249,18 @@ namespace Coinecta.Data.Migrations
                             b1.Property<decimal>("StakePoolByAddressTxIndex")
                                 .HasColumnType("numeric(20,0)");
 
-                            b1.Property<int>("StakePoolByAddressUtxoStatus")
-                                .HasColumnType("integer");
-
                             b1.Property<decimal>("Coin")
                                 .HasColumnType("numeric(20,0)");
 
                             b1.Property<JsonElement>("MultiAssetJson")
                                 .HasColumnType("jsonb");
 
-                            b1.HasKey("StakePoolByAddressAddress", "StakePoolByAddressSlot", "StakePoolByAddressTxHash", "StakePoolByAddressTxIndex", "StakePoolByAddressUtxoStatus");
+                            b1.HasKey("StakePoolByAddressAddress", "StakePoolByAddressSlot", "StakePoolByAddressTxHash", "StakePoolByAddressTxIndex");
 
                             b1.ToTable("StakePoolByAddresses", "coinecta");
 
                             b1.WithOwner()
-                                .HasForeignKey("StakePoolByAddressAddress", "StakePoolByAddressSlot", "StakePoolByAddressTxHash", "StakePoolByAddressTxIndex", "StakePoolByAddressUtxoStatus");
+                                .HasForeignKey("StakePoolByAddressAddress", "StakePoolByAddressSlot", "StakePoolByAddressTxHash", "StakePoolByAddressTxIndex");
                         });
 
                     b.Navigation("Amount")
@@ -289,21 +283,18 @@ namespace Coinecta.Data.Migrations
                             b1.Property<decimal>("StakePositionByStakeKeyTxIndex")
                                 .HasColumnType("numeric(20,0)");
 
-                            b1.Property<int>("StakePositionByStakeKeyUtxoStatus")
-                                .HasColumnType("integer");
-
                             b1.Property<decimal>("Denominator")
                                 .HasColumnType("numeric(20,0)");
 
                             b1.Property<decimal>("Numerator")
                                 .HasColumnType("numeric(20,0)");
 
-                            b1.HasKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex", "StakePositionByStakeKeyUtxoStatus");
+                            b1.HasKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex");
 
                             b1.ToTable("StakePositionByStakeKeys", "coinecta");
 
                             b1.WithOwner()
-                                .HasForeignKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex", "StakePositionByStakeKeyUtxoStatus");
+                                .HasForeignKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex");
                         });
 
                     b.OwnsOne("Cardano.Sync.Data.Models.Value", "Amount", b1 =>
@@ -320,21 +311,18 @@ namespace Coinecta.Data.Migrations
                             b1.Property<decimal>("StakePositionByStakeKeyTxIndex")
                                 .HasColumnType("numeric(20,0)");
 
-                            b1.Property<int>("StakePositionByStakeKeyUtxoStatus")
-                                .HasColumnType("integer");
-
                             b1.Property<decimal>("Coin")
                                 .HasColumnType("numeric(20,0)");
 
                             b1.Property<JsonElement>("MultiAssetJson")
                                 .HasColumnType("jsonb");
 
-                            b1.HasKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex", "StakePositionByStakeKeyUtxoStatus");
+                            b1.HasKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex");
 
                             b1.ToTable("StakePositionByStakeKeys", "coinecta");
 
                             b1.WithOwner()
-                                .HasForeignKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex", "StakePositionByStakeKeyUtxoStatus");
+                                .HasForeignKey("StakePositionByStakeKeyStakeKey", "StakePositionByStakeKeySlot", "StakePositionByStakeKeyTxHash", "StakePositionByStakeKeyTxIndex");
                         });
 
                     b.Navigation("Amount")

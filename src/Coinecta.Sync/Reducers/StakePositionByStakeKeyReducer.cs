@@ -7,6 +7,7 @@ using Coinecta.Data.Models.Datums;
 using Coinecta.Data.Models.Reducers;
 using Cardano.Sync.Data.Models.Datums;
 using Cardano.Sync.Reducers;
+using Coinecta.Data.Models.Enums;
 
 namespace Coinecta.Sync.Reducers;
 
@@ -22,7 +23,7 @@ public class StakePositionByStakeKeyReducer(
     public Task RollBackwardAsync(NextResponse response)
     {
         _dbContext = dbContextFactory.CreateDbContext();
-        var rollbackSlot = response.Block.Slot;
+        ulong rollbackSlot = response.Block.Slot;
         _dbContext.StakePositionByStakeKeys.RemoveRange(_dbContext.StakePositionByStakeKeys.Where(s => s.Slot > rollbackSlot));
         _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
@@ -32,110 +33,128 @@ public class StakePositionByStakeKeyReducer(
     public async Task RollForwardAsync(NextResponse response)
     {
         _dbContext = dbContextFactory.CreateDbContext();
-        await ProcessInputAync(response);
-        await ProcessOutputAync(response);
+
+        foreach (TransactionBody txBody in response.Block.TransactionBodies)
+        {
+            await ProcessTransactionBodyAsync(response.Block, txBody);
+        }
+
         await _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
     }
 
-    private async Task ProcessInputAync(NextResponse response)
+    private async Task ProcessTransactionBodyAsync(Block block, TransactionBody tx)
+    {
+        await ProcessInputAync(block, tx);
+        await ProcessOutputAync(block, tx);
+    }
+
+    private async Task ProcessInputAync(Block block, TransactionBody tx)
     {
         // Collect input id and index as tuples
-        var inputTuples = response.Block.TransactionBodies
-            .SelectMany(txBody => txBody.Inputs.Select(input => (Id: input.Id.ToHex(), input.Index)))
-            .ToList();
-
-        // Define the base query
-        var query = _dbContext.StakePositionByStakeKeys.AsQueryable();
-
-        // Build the query dynamically with OR conditions
-        IQueryable<StakePositionByStakeKey>? combinedQuery = null;
-        foreach (var tuple in inputTuples)
+        foreach (TransactionInput input in tx.Inputs)
         {
-            var currentQuery = query.Where(s => s.TxHash == tuple.Id && s.TxIndex == tuple.Index);
-            combinedQuery = combinedQuery == null ? currentQuery : combinedQuery.Union(currentQuery);
-        }
+            // First check in-memory data
+            StakePositionByStakeKey? stakePosition = _dbContext.StakePositionByStakeKeys.Local
+                .Where(s => s.TxHash == input.Id.ToHex())
+                .Where(s => s.TxIndex == input.Index)
+                .FirstOrDefault();
 
-        // Execute the query if there are conditions
-        if (combinedQuery is not null)
-        {
-            var stakePositionsByStakeKey = await combinedQuery.ToListAsync();
-            if (stakePositionsByStakeKey.Count != 0)
+            // Then check the database
+            stakePosition ??= await _dbContext.StakePositionByStakeKeys
+                .AsNoTracking()
+                .Where(s => s.TxHash == input.Id.ToHex())
+                .Where(s => s.TxIndex == input.Index)
+                .FirstOrDefaultAsync();
+
+            if (stakePosition is not null)
             {
-                _dbContext.StakePositionByStakeKeys.RemoveRange(stakePositionsByStakeKey);
+                StakePositionByStakeKey stakePositionByKey = new()
+                {
+                    StakeKey = stakePosition.StakeKey,
+                    Slot = block.Slot,
+                    TxHash = stakePosition.TxHash,
+                    TxIndex = stakePosition.TxIndex,
+                    Amount = stakePosition.Amount,
+                    StakePosition = stakePosition.StakePosition,
+                    LockTime = stakePosition.LockTime,
+                    Interest = stakePosition.Interest,
+                    UtxoStatus = UtxoStatus.Spent
+                };
+
+                _dbContext.StakePositionByStakeKeys.Add(stakePositionByKey);
             }
         }
     }
 
-    private async Task ProcessOutputAync(NextResponse response)
+    private async Task ProcessOutputAync(Block block, TransactionBody tx)
     {
-        foreach (var txBody in response.Block.TransactionBodies)
+        foreach (TransactionOutput output in tx.Outputs)
         {
-            foreach (var output in txBody.Outputs)
+            string addressBech32 = output.Address.ToBech32();
+            if (addressBech32.StartsWith("addr"))
             {
-                var addressBech32 = output.Address.ToBech32();
-                if (addressBech32.StartsWith("addr"))
+                Address address = new(output.Address.ToBech32());
+                string pkh = Convert.ToHexString(address.GetPublicKeyHash()).ToLowerInvariant();
+                if (pkh == configuration["CoinectaTimelockValidatorHash"])
                 {
-                    var address = new Address(output.Address.ToBech32());
-                    var pkh = Convert.ToHexString(address.GetPublicKeyHash()).ToLowerInvariant();
-                    if (pkh == configuration["CoinectaTimelockValidatorHash"])
+                    if (output.Datum is not null && output.Datum.Type == DatumType.InlineDatum)
                     {
-                        if (output.Datum is not null && output.Datum.Type == DatumType.InlineDatum)
+                        byte[] datum = output.Datum.Data;
+                        try
                         {
-                            var datum = output.Datum.Data;
-                            try
+                            CIP68<Timelock> timelockDatum = CborConverter.Deserialize<CIP68<Timelock>>(datum);
+                            Cardano.Sync.Data.Models.TransactionOutput entityUtxo = Utils.MapTransactionOutputEntity(tx.Id.ToHex(), block.Slot, output);
+                            if (entityUtxo.Amount.MultiAsset.TryGetValue(configuration["CoinectaStakeKeyPolicyId"]!, out Dictionary<string, ulong>? stakeKeyBundle))
                             {
-                                var timelockDatum = CborConverter.Deserialize<CIP68<Timelock>>(datum);
-                                var entityUtxo = Utils.MapTransactionOutputEntity(txBody.Id.ToHex(), response.Block.Slot, output);
-                                if (entityUtxo.Amount.MultiAsset.TryGetValue(configuration["CoinectaStakeKeyPolicyId"]!, out Dictionary<string, ulong>? stakeKeyBundle))
+                                string? assetName = stakeKeyBundle.Keys.FirstOrDefault(key => key.StartsWith("000643b0"));
+                                if (assetName is not null)
                                 {
-                                    var assetName = stakeKeyBundle.Keys.FirstOrDefault(key => key.StartsWith("000643b0"));
-                                    if (assetName is not null)
+
+                                    StakeRequestByAddress? stakeRequest = null;
+
+                                    while (stakeRequest is null)
                                     {
-                                        
-                                        StakeRequestByAddress? stakeRequest = null;
-
-                                        while(stakeRequest is null)
+                                        foreach (TransactionInput input in tx.Inputs)
                                         {
-                                            foreach(var input in txBody.Inputs)
+                                            stakeRequest = await _dbContext.StakeRequestByAddresses.FirstOrDefaultAsync(s => s.TxHash == input.Id.ToHex() && s.TxIndex == input.Index);
+                                            if (stakeRequest is not null)
                                             {
-                                                stakeRequest = await _dbContext.StakeRequestByAddresses.FirstOrDefaultAsync(s => s.TxHash == input.Id.ToHex() && s.TxIndex == input.Index);
-                                                if (stakeRequest is not null)
-                                                {
-                                                    break;
-                                                }
-                                                await Task.Delay(100);
+                                                break;
                                             }
+                                            await Task.Delay(100);
                                         }
-
-                                        var stakePositionByKey = new StakePositionByStakeKey
-                                        {
-                                            StakeKey = configuration["CoinectaStakeKeyPolicyId"]! + assetName.Replace("000643b0", string.Empty),
-                                            Slot = response.Block.Slot,
-                                            TxHash = txBody.Id.ToHex(),
-                                            TxIndex = output.Index,
-                                            Amount = entityUtxo.Amount,
-                                            StakePosition = timelockDatum,
-                                            LockTime = timelockDatum.Extra.Lockuntil,
-                                            Interest = stakeRequest.StakePoolProxy.RewardMultiplier
-                                        };
-
-                                        _dbContext.StakePositionByStakeKeys.Add(stakePositionByKey);
                                     }
+
+                                    StakePositionByStakeKey stakePositionByKey = new()
+                                    {
+                                        StakeKey = configuration["CoinectaStakeKeyPolicyId"]! + assetName.Replace("000643b0", string.Empty),
+                                        Slot = block.Slot,
+                                        TxHash = tx.Id.ToHex(),
+                                        TxIndex = output.Index,
+                                        Amount = entityUtxo.Amount,
+                                        StakePosition = timelockDatum,
+                                        LockTime = timelockDatum.Extra.Lockuntil,
+                                        Interest = stakeRequest.StakePoolProxy.RewardMultiplier,
+                                        UtxoStatus = UtxoStatus.Unspent
+                                    };
+
+                                    _dbContext.StakePositionByStakeKeys.Add(stakePositionByKey);
                                 }
                             }
-                            catch
-                            {
-                                _logger.LogError("Error deserializing timelock datum: {datum} for {txHash}#{txIndex}",
-                                    Convert.ToHexString(datum).ToLowerInvariant(),
-                                    txBody.Id.ToHex(),
-                                    output.Index
-                                );
-                            }
+                        }
+                        catch
+                        {
+                            _logger.LogError("Error deserializing timelock datum: {datum} for {txHash}#{txIndex}",
+                                Convert.ToHexString(datum).ToLowerInvariant(),
+                                tx.Id.ToHex(),
+                                output.Index
+                            );
                         }
                     }
                 }
             }
         }
+
     }
 }

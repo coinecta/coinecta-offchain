@@ -10,15 +10,16 @@ using CardanoSharp.Wallet.Models.Transactions;
 using CardanoSharp.Wallet.Models.Transactions.TransactionWitness;
 using CardanoSharp.Wallet.Extensions.Models.Transactions.TransactionWitnesses;
 using CardanoSharp.Wallet.Extensions.Models.Transactions;
-using Coinecta.API.Models;
 using CardanoSharp.Wallet.CIPs.CIP2.Models;
 using CardanoSharp.Wallet.CIPs.CIP2;
 using CardanoSharp.Wallet.CIPs.CIP2.ChangeCreationStrategies;
-using CardanoSharp.Wallet.Extensions;
 using System.Numerics;
+using Coinecta.Data.Models;
+using Microsoft.Extensions.Configuration;
+using UtxoByAddress = Coinecta.Data.Models.Reducers.UtxoByAddress;
 using CardanoSharp.Wallet.Common;
 
-namespace Coinecta.API.Utils;
+namespace Coinecta.Data.Utils;
 
 public static class CoinectaUtils
 {
@@ -51,18 +52,23 @@ public static class CoinectaUtils
         return new Address(Convert.FromHexString(addressCbor));
     }
 
-    public static Address ValidatorAddress(byte[] validatorScriptCbor)
+    public static Address ValidatorAddress(byte[] validatorScriptCbor, IConfiguration configuration)
     {
         PlutusV2Script plutusScript = PlutusV2ScriptBuilder.Create
         .SetScript(validatorScriptCbor)
         .Build();
 
-        return ValidatorAddress(plutusScript);
+        return ValidatorAddress(plutusScript, configuration);
     }
 
-    public static Address ValidatorAddress(PlutusV2Script plutusScript)
+    public static NetworkType GetNetworkType(IConfiguration configuration)
     {
-        return AddressUtility.GetEnterpriseScriptAddress(plutusScript, NetworkType.Preview);
+        return configuration.GetValue<NetworkType>("CardanoNetworkMagic");
+    }
+
+    public static Address ValidatorAddress(PlutusV2Script plutusScript, IConfiguration configuration)
+    {
+        return AddressUtility.GetEnterpriseScriptAddress(plutusScript, GetNetworkType(configuration));
     }
 
     public static TransactionOutput ConvertTxOutputCbor(string txOutputCbor)
@@ -178,6 +184,57 @@ public static class CoinectaUtils
         });
 
         return multiAssetBuilder;
+    }
+
+    public static List<Asset> ConvertNativeAssetToBalanceAsset(Dictionary<byte[], NativeAsset> multiAsset)
+    {
+        if (multiAsset == null)
+        {
+            return [];
+        }
+
+        List<Asset> balanceAssets = [];
+        multiAsset.Keys.ToList().ForEach((policyId) =>
+        {
+            string policyIdHex = Convert.ToHexString(policyId).ToLowerInvariant();
+            var asset = multiAsset[policyId];
+            asset.Token.Keys.ToList().ForEach(assetName =>
+            {
+                string assetNameHex = Convert.ToHexString(assetName).ToLowerInvariant();
+                ulong amount = (ulong)asset.Token[assetName];
+                balanceAssets.Add(new Asset
+                {
+                    PolicyId = policyIdHex,
+                    Name = assetNameHex,
+                    Quantity = (long)amount
+                });
+            });
+        });
+
+        return balanceAssets;
+    }
+
+    public static List<Utxo> ConvertUtxosByAddressToUtxo(List<UtxoByAddress> utxosByAddress)
+    {
+        List<Utxo> resolvedUtxos = utxosByAddress
+            .Select(u =>
+            {
+                var resolvedOutput = ConvertTxOutputCbor(Convert.ToHexString(u.TxOutCbor!));
+                return new Utxo()
+                {
+                    TxHash = u.TxHash,
+                    TxIndex = (uint)u.TxIndex,
+                    OutputAddress = u.Address,
+                    Balance = new()
+                    {
+                        Lovelaces = resolvedOutput.Value.Coin,
+                        Assets = ConvertNativeAssetToBalanceAsset(resolvedOutput.Value.MultiAsset)
+                    }
+                };
+            })
+            .ToList();
+
+        return resolvedUtxos;
     }
 
     public static string AbbreviateAmount(BigInteger amount, int decimals)

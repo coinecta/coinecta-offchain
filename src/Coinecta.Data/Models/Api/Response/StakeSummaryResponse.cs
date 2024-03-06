@@ -1,4 +1,6 @@
-namespace Coinecta.API.Models.Response;
+using Coinecta.Data.Models.Api;
+
+namespace Coinecta.Data.Models.Response;
 
 public record StakeSummaryResponse
 {

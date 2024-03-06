@@ -1,4 +1,4 @@
-namespace Coinecta.API.Models;
+namespace Coinecta.Data.Models.Api;
 
 public record StakeStats
 {

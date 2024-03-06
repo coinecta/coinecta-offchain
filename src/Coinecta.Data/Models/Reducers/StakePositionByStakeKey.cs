@@ -3,6 +3,7 @@ using System.Text.Json;
 using Cardano.Sync.Data.Models;
 using Cardano.Sync.Data.Models.Datums;
 using Coinecta.Data.Models.Datums;
+using Coinecta.Data.Models.Enums;
 
 namespace Coinecta.Data.Models.Reducers;
 
@@ -14,11 +15,12 @@ public record StakePositionByStakeKey
     public ulong TxIndex { get; init; }
     public Value Amount { get; init; } = default!;
     public ulong LockTime { get; init; }
+    public UtxoStatus UtxoStatus { get; set; } = UtxoStatus.Unspent;
     public Rational Interest { get; init; } = default!;
-    
+
     [NotMapped]
     public CIP68<Timelock> StakePosition { get; set; } = default!;
-    
+
     public JsonElement StakePositionJson
     {
         get
