@@ -244,7 +244,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
 
         // Wallet utxos
         List<Utxo> walletUtxos = CoinectaUtils.ConvertUtxoListCbor(request.WalletUtxoListCbor).ToList();
-        Address walletAddress = new(walletUtxos.First().OutputAddress);
+        Address walletAddress = new(request.ChangeAddress);
 
         IEnumerable<string> outRefs = request.StakeUtxoOutputReferences.ToList().Select(o => o.TxHash + o.Index);
         List<StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys
@@ -279,7 +279,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             string referenceAssetName = referenceKeyPrefix + assetName;
 
             // Add Inputs, Outputs, Redeemers and MintAssets
-            Data.Models.OutputReference stakePositionOutRef = new()
+            Models.OutputReference stakePositionOutRef = new()
             {
                 TxHash = stakePosition.TxHash,
                 Index = (uint)stakePosition.TxIndex
