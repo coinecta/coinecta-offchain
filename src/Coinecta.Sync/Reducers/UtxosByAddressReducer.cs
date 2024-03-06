@@ -69,9 +69,9 @@ public class UtxosByAddressReducer(
                     });
                 }
             }
-
-            await _dbContext.SaveChangesAsync();
         }
+
+        await _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
     }
 }
