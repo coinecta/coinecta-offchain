@@ -1,3 +1,6 @@
+using System.Net.Http.Json;
+using System.Text.Json;
+using Cardano.Sync.Data.Models;
 using CardanoSharp.Wallet;
 using CardanoSharp.Wallet.CIPs.CIP2.Models;
 using CardanoSharp.Wallet.Enums;
@@ -11,23 +14,23 @@ using CardanoSharp.Wallet.Models.Transactions;
 using CardanoSharp.Wallet.TransactionBuilding;
 using CardanoSharp.Wallet.Utilities;
 using Coinecta.Catcher.Models;
-using Coinecta.Data;
 using Coinecta.Data.Models.Api.Request;
 using Coinecta.Data.Models.Reducers;
-using Coinecta.Data.Services;
 using Coinecta.Data.Utils;
-using Microsoft.EntityFrameworkCore;
+using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 
 namespace Coinecta.Catcher;
 
 public class Worker(
-    ILogger<Worker> logger, IDbContextFactory<CoinectaDbContext>
-    dbContextFactory, IConfiguration configuration,
-    TransactionBuildingService txBuildingService,
-    HttpClient httpClient) : BackgroundService
+    ILogger<Worker> logger,
+    IConfiguration configuration,
+    JsonSerializerOptions jsonSerializerOptions,
+    IHttpClientFactory httpClientFactory) : BackgroundService
 {
     private readonly ILogger<Worker> _logger = logger;
     private CatcherState CatcherState { get; set; } = new();
+    private HttpClient CoinectaApi => httpClientFactory.CreateClient("CoinectaApi");
+    private HttpClient SubmitApi => httpClientFactory.CreateClient("SubmitApi");
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -60,30 +63,28 @@ public class Worker(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
-
             // Fetch Pending Requests
-            List<StakeRequestByAddress> stakeRequests = await dbContext.StakeRequestByAddresses
-                .AsNoTracking()
-                .Where(s => s.Status == StakeRequestStatus.Pending)
-                .ToListAsync(cancellationToken: stoppingToken);
-
-            // Fetch updated stake pool if not yet set
-            await UpdateCurrentStakePoolsAsync(dbContext, stoppingToken);
+            List<StakeRequestByAddress> stakeRequests = await FetchStakeRequestsAsync();
 
             // Fetch current slot
             _logger.LogInformation("Fetching Current Slot...");
-            ulong currentSlot = await dbContext.Blocks
-                .AsNoTracking()
-                .Select(b => b.Slot).OrderByDescending(b => b)
-                .FirstOrDefaultAsync(cancellationToken: stoppingToken);
+            Block? latestBlock = await FetchLatestBlockAsync();
+
+            if (latestBlock is null)
+            {
+                _logger.LogError("Error while fetching latest block. Retrying...");
+                await Task.Delay(5_000, stoppingToken);
+                continue;
+            }
+
+            ulong currentSlot = latestBlock.Slot;
 
             // Remove expired requests
             CatcherState.PendingExecutionStakeRequests = CatcherState.PendingExecutionStakeRequests
                .Where(p => p.TTL > currentSlot)
                .ToList();
 
-            var pendingExecutionStakeRequestOutrefs = CatcherState.PendingExecutionStakeRequests
+            List<string> pendingExecutionStakeRequestOutrefs = CatcherState.PendingExecutionStakeRequests
                 .Select(p => p.OutRef)
                 .ToList();
 
@@ -92,14 +93,19 @@ public class Worker(
                 .Where(s => !pendingExecutionStakeRequestOutrefs.Contains(s.TxHash + s.TxIndex))
                 .ToList();
 
-            // Collateral Utxo
-            await UpdateCurrentCollateralUtxoAsync(dbContext);
+            if (pendingStakeRequests.Count == 0)
+            {
+                _logger.LogInformation("No Stake Requests to process. Retrying...");
+                await Task.Delay(5_000, stoppingToken);
+                continue;
+            }
 
-            // Certificate Utxo
-            await UpdateCurrentCertificateUtxoAsync(dbContext);
+            await UpdateCurrentStakePoolsAsync();
+            await UpdateCurrentCollateralUtxoAsync();
+            await UpdateCurrentCertificateUtxoAsync();
 
             // execute all transactions
-            var stakeRequestCount = pendingStakeRequests.Count;
+            int stakeRequestCount = pendingStakeRequests.Count;
             _logger.LogInformation("Processing {stakeRequestCount} Stake Requests...", stakeRequestCount);
             foreach (StakeRequestByAddress stakeRequest in pendingStakeRequests)
             {
@@ -115,7 +121,6 @@ public class Worker(
                             stakeRequest,
                             stakePool,
                             currentSlot,
-                            dbContext,
                             stoppingToken);
                     }
                     catch (Exception e)
@@ -130,32 +135,23 @@ public class Worker(
         }
     }
 
-    private async Task UpdateCurrentStakePoolsAsync(CoinectaDbContext dbContext, CancellationToken stoppingToken)
+    private async Task UpdateCurrentStakePoolsAsync()
     {
         _logger.LogInformation("Fetching Stake Pools...");
-        CatcherState.CurrentStakePoolStates = CatcherState.CurrentStakePoolStates ?? await dbContext.StakePoolByAddresses
-            .GroupBy(u => new { u.TxHash, u.TxIndex })
-            .Where(g => g.Count() < 2)
-            .Select(g => g.First())
-            .ToListAsync(cancellationToken: stoppingToken) ?? [];
+        CatcherState.CurrentStakePoolStates = CatcherState.CurrentStakePoolStates ?? await FetchStakePoolsAsync();
     }
 
-    private async Task UpdateCurrentCertificateUtxoAsync(CoinectaDbContext dbContext)
+    private async Task UpdateCurrentCertificateUtxoAsync()
     {
-        CatcherState.CurrentCertificateUtxoState = CatcherState.CurrentCertificateUtxoState ?? await GetUpdatedCertificateUtxoAsync(dbContext);
+        CatcherState.CurrentCertificateUtxoState = CatcherState.CurrentCertificateUtxoState ?? await GetUpdatedCertificateUtxoAsync();
     }
 
-    private async Task<Utxo> GetUpdatedCertificateUtxoAsync(CoinectaDbContext dbContext)
+    private async Task<Utxo> GetUpdatedCertificateUtxoAsync()
     {
         _logger.LogInformation("Fetching Certificate Utxo...");
-        var result = await dbContext.UtxosByAddress
-            .Where(u => u.Address == CatcherState.CatcherAddress.ToString())
-            .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
-            .Where(g => g.Count() < 2)
-            .Select(g => g.First())
-            .ToListAsync();
+        List<UtxoByAddress> result = await FetchUtxosAsync();
 
-        var utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
+        List<Utxo> utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
         ITokenBundleBuilder catcherTokenBundle = TokenBundleBuilder.Create;
         catcherTokenBundle.AddToken(Convert.FromHexString(CatcherState.CatcherCertificatePolicyId), Convert.FromHexString(CatcherState.CatcherCertificateAssetName), 1);
 
@@ -171,23 +167,16 @@ public class Worker(
         return catcherCoinSelectionResult.SelectedUtxos.First();
     }
 
-
-    private async Task UpdateCurrentCollateralUtxoAsync(CoinectaDbContext dbContext)
+    private async Task UpdateCurrentCollateralUtxoAsync()
     {
-        CatcherState.CurrentCollateralUtxoState = CatcherState.CurrentCollateralUtxoState ?? await GetUpdatedCollateralUtxoAsync(dbContext);
+        CatcherState.CurrentCollateralUtxoState = CatcherState.CurrentCollateralUtxoState ?? await GetUpdatedCollateralUtxoAsync();
     }
 
-    private async Task<Utxo> GetUpdatedCollateralUtxoAsync(CoinectaDbContext dbContext)
+    private async Task<Utxo> GetUpdatedCollateralUtxoAsync()
     {
         _logger.LogInformation("Fetching Collateral Utxo...");
-        var result = await dbContext.UtxosByAddress
-            .Where(u => u.Address == CatcherState.CatcherAddress.ToString())
-            .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
-            .Where(g => g.Count() < 2)
-            .Select(g => g.First())
-            .ToListAsync();
-
-        var utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
+        List<UtxoByAddress> result = await FetchUtxosAsync();
+        List<Utxo> utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
 
         TransactionOutput collateralOutput = new()
         {
@@ -203,11 +192,114 @@ public class Worker(
         return catcherCollateralCoinSelectionResult.SelectedUtxos.First();
     }
 
+    private async Task<List<StakeRequestByAddress>> FetchStakeRequestsAsync()
+    {
+        try
+        {
+            HttpResponseMessage response = await CoinectaApi.GetAsync("/stake/requests/pending?page=1&limit=50");
+            if (response.IsSuccessStatusCode)
+            {
+
+                string jsonString = await response.Content.ReadAsStringAsync();
+                List<StakeRequestByAddress>? stakeRequestsByAddress = JsonSerializer.Deserialize<List<StakeRequestByAddress>>(jsonString, jsonSerializerOptions);
+                return stakeRequestsByAddress ?? [];
+            }
+            else
+            {
+                // Handle error response
+                _logger.LogError("Error while fetching stake requests. Status Code: {StatusCode}", response.StatusCode);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error while fetching stake requests");
+        }
+        return [];
+    }
+
+    private async Task<List<StakePoolByAddress>> FetchStakePoolsAsync()
+    {
+        try
+        {
+            string stakePoolOwnerAddress = configuration["CoinectaStakePoolOwnerAddress"]!;
+            string stakePoolOwnerPkh = configuration["CoinectaStakePoolOwnerPkh"]!;
+            HttpResponseMessage response = await CoinectaApi.GetAsync($"stake/pools/{stakePoolOwnerAddress}/{stakePoolOwnerPkh}");
+            if (response.IsSuccessStatusCode)
+            {
+
+                string jsonString = await response.Content.ReadAsStringAsync();
+                List<StakePoolByAddress>? stakePoolsByAddress = JsonSerializer.Deserialize<List<StakePoolByAddress>>(jsonString, jsonSerializerOptions);
+                return stakePoolsByAddress ?? [];
+            }
+            else
+            {
+                // Handle error response
+                _logger.LogError("Error while fetching stake pools. Status Code: {StatusCode}", response.StatusCode);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error while fetching stake pools");
+        }
+
+        return [];
+    }
+
+    private async Task<List<UtxoByAddress>> FetchUtxosAsync()
+    {
+        try
+        {
+            HttpResponseMessage response = await CoinectaApi.GetAsync($"/transaction/utxos/{CatcherState.CatcherAddress}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                string jsonString = await response.Content.ReadAsStringAsync();
+                List<UtxoByAddress>? utxosByAddress = JsonSerializer.Deserialize<List<UtxoByAddress>>(jsonString, jsonSerializerOptions);
+                return utxosByAddress ?? [];
+            }
+            else
+            {
+                // Handle error response
+                _logger.LogError("Error while fetching utxos. Status Code: {StatusCode}", response.StatusCode);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error while fetching utxos");
+        }
+
+        return [];
+    }
+
+    private async Task<Block?> FetchLatestBlockAsync()
+    {
+        try
+        {
+            HttpResponseMessage response = await CoinectaApi.GetAsync("/block/latest");
+            if (response.IsSuccessStatusCode)
+            {
+                string jsonString = await response.Content.ReadAsStringAsync();
+                Block? block = System.Text.Json.JsonSerializer.Deserialize<Block>(jsonString, jsonSerializerOptions);
+                return block;
+            }
+            else
+            {
+                // Handle error response
+                _logger.LogError("Error while fetching latest block. Status Code: {StatusCode}", response.StatusCode);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error while fetching latest block");
+        }
+
+        return null;
+    }
+
     private async Task ProcessStakeRequestAsync(
         StakeRequestByAddress stakeRequest,
         StakePoolByAddress stakePool,
         ulong currentSlot,
-        CoinectaDbContext dbContext,
         CancellationToken stoppingToken)
     {
         _logger.LogInformation("Processing Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
@@ -219,7 +311,10 @@ public class Worker(
             CertificateUtxo = CatcherState.CurrentCertificateUtxoState,
         };
 
-        string unsignedTxCbor = await txBuildingService.ExecuteStakeAsync(request);
+        JsonContent executePayload = JsonContent.Create(request, request.GetType(), null, jsonSerializerOptions);
+        HttpResponseMessage executeResponse = await CoinectaApi.PostAsync("transaction/stake/execute", executePayload, stoppingToken);
+        string executeResponseJson = await executeResponse.Content.ReadAsStringAsync(stoppingToken);
+        string unsignedTxCbor = JsonSerializer.Deserialize<string>(executeResponseJson)!;
 
         Transaction tx = Convert.FromHexString(unsignedTxCbor).DeserializeTransaction();
         TransactionWitnessSetBuilder witnessSetBuilder = new();
@@ -238,22 +333,18 @@ public class Worker(
         // When there's an error submitting the transaction, we reset the state
         try
         {
-            ByteArrayContent content = new(Convert.FromHexString(signedTxCbor));
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/cbor");
-
             // Execute the POST request
-            HttpResponseMessage response = await httpClient.PostAsync(CatcherState.SubmitApiUrl, content, stoppingToken);
+            ByteArrayContent submitPayload = new(Convert.FromHexString(signedTxCbor));
+            submitPayload.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/cbor");
+            HttpResponseMessage submitTxResponse = await SubmitApi.PostAsync("api/submit/tx", submitPayload, stoppingToken);
 
             // Read and output the response content
-            string responseContent = await response.Content.ReadAsStringAsync(stoppingToken);
+            string responseContent = await submitTxResponse.Content.ReadAsStringAsync(stoppingToken);
 
-            if (!response.IsSuccessStatusCode)
+            if (!submitTxResponse.IsSuccessStatusCode)
             {
-                throw new Exception($"Error while submitting transaction. Status Code: {response.StatusCode}. Response: {responseContent}");
+                throw new Exception($"Error while submitting transaction. Status Code: {submitTxResponse.StatusCode}. Response: {responseContent}");
             }
-
-            Console.WriteLine(responseContent);
-            await response.Content.ReadAsStringAsync(stoppingToken);
         }
         catch (Exception e)
         {
@@ -262,9 +353,9 @@ public class Worker(
             CatcherState.CurrentCertificateUtxoState = null;
             CatcherState.CurrentCollateralUtxoState = null;
 
-            await UpdateCurrentStakePoolsAsync(dbContext, stoppingToken);
-            await UpdateCurrentCertificateUtxoAsync(dbContext);
-            await UpdateCurrentCollateralUtxoAsync(dbContext);
+            await UpdateCurrentStakePoolsAsync();
+            await UpdateCurrentCertificateUtxoAsync();
+            await UpdateCurrentCollateralUtxoAsync();
             return;
         }
 

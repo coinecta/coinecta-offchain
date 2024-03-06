@@ -16,8 +16,6 @@ using CardanoSharp.Wallet.CIPs.CIP2.ChangeCreationStrategies;
 using System.Numerics;
 using Coinecta.Data.Models;
 using Microsoft.Extensions.Configuration;
-using Coinecta.Data.Migrations;
-using Coinecta.Data.Models.Reducers;
 using UtxoByAddress = Coinecta.Data.Models.Reducers.UtxoByAddress;
 using CardanoSharp.Wallet.Common;
 

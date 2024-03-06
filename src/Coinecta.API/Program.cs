@@ -3,13 +3,13 @@ using Coinecta.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Coinecta.Data.Models.Reducers;
-using Coinecta.API;
 using Coinecta.Data.Models.Response;
 using Coinecta.Data.Models.Api;
 using Coinecta.Data.Models.Api.Request;
 using Coinecta.Data.Services;
 using Coinecta.Data.Utils;
 using CardanoSharp.Wallet.Enums;
+using Coinecta.Models.Api;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -34,7 +34,10 @@ builder.Services.AddScoped<TransactionBuildingService>();
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.CustomSchemaIds(type => type.FullName!.Replace('.', '_'));
+});
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
 {
     options.SerializerOptions.Converters.Add(new UlongToStringConverter());
@@ -72,14 +75,39 @@ app.MapGet("/stake/pool/{address}/{ownerPkh}/{policyId}/{assetName}", async (
 {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
     List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
+
     return Results.Ok(
         stakePools
             .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(ownerPkh, StringComparison.InvariantCultureIgnoreCase))
             .Where(sp => sp.Amount.MultiAsset.ContainsKey(policyId.ToLowerInvariant()) && sp.Amount.MultiAsset[policyId].ContainsKey(assetName.ToLowerInvariant()))
+            .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
+            .Where(g => g.Count() < 2)
+            .Select(g => g.First())
             .First()
     );
 })
 .WithName("GetStakePool")
+.WithOpenApi();
+
+app.MapGet("/stake/pools/{address}/{ownerPkh}", async (
+    IDbContextFactory<CoinectaDbContext> dbContextFactory,
+    string address,
+    string ownerPkh
+) =>
+{
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+    List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses.Where(s => s.Address == address).OrderByDescending(s => s.Slot).ToListAsync();
+
+    return Results.Ok(
+        stakePools
+            .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(ownerPkh, StringComparison.InvariantCultureIgnoreCase))
+            .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
+            .Where(g => g.Count() < 2)
+            .Select(g => g.First())
+            .ToList()
+    );
+})
+.WithName("GetStakePools")
 .WithOpenApi();
 
 app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration, [FromBody] List<string> stakeKeys) =>
@@ -173,6 +201,31 @@ app.MapPost("/stake/requests/", async (
 })
 .WithName("GetStakeRequestsByAddresses")
 .WithOpenApi();
+
+app.MapGet("/stake/requests/pending", async (
+    IDbContextFactory<CoinectaDbContext> dbContextFactory,
+    IConfiguration configuration,
+    [FromQuery] int page = 1,
+    [FromQuery] int limit = 10
+) =>
+{
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
+    int skip = (page - 1) * limit;
+
+    var result = await dbContext.StakeRequestByAddresses
+        .Where(s => s.Status == StakeRequestStatus.Pending)
+        .OrderBy(s => s.Slot)
+        .Skip(skip)
+        .Take(limit)
+        .ToListAsync();
+
+
+    return Results.Ok(result);
+})
+.WithName("GetStakeRequests")
+.WithOpenApi();
+
 
 app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration, [FromBody] List<string> stakeKeys) =>
 {
@@ -296,11 +349,17 @@ app.MapPost("/transaction/stake/execute", async (TransactionBuildingService txBu
 .WithName("ExecuteStakeTransaction")
 .WithOpenApi();
 
-app.MapGet("/transaction/utxos", async (IDbContextFactory<CoinectaDbContext> dbContextFactory) =>
+app.MapGet("/transaction/utxos/{address}", async (IDbContextFactory<CoinectaDbContext> dbContextFactory, [FromRoute] string address) =>
 {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
+    if (string.IsNullOrEmpty(address))
+    {
+        return Results.BadRequest("Address is required");
+    }
+
     var result = await dbContext.UtxosByAddress
-        .Where(u => u.Address == "addr_test1qpg007fw5caetatd8gxcyt6d08lzteh9afk5smfd9hr60l72udjv5rtpfksjl64zeay5f2gpj6st0tl8m400nq8hjp9suxaw6c")
+        .Where(u => u.Address == address)
         .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
         .Where(g => g.Count() < 2)
         .Select(g => g.First())
@@ -308,22 +367,18 @@ app.MapGet("/transaction/utxos", async (IDbContextFactory<CoinectaDbContext> dbC
 
     return Results.Ok(result);
 })
-.WithName("GetUtxos")
+.WithName("GetAddressUtxos")
 .WithOpenApi();
 
-app.MapGet("/transaction/stakepool/utxos", async (IDbContextFactory<CoinectaDbContext> dbContextFactory) =>
+app.MapGet("/block/latest", async (IDbContextFactory<CoinectaDbContext> dbContextFactory) =>
 {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
-    var result = await dbContext.StakePoolByAddresses
-        .Where(u => u.Address == "addr_test1wr2c6hf5sy9l6q6hh2qk3q7a360v5t27tk6k8d5lpfm973qw6ss82")
-        .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
-        .Where(g => g.Count() < 2)
-        .Select(g => g.First())
-        .ToListAsync();
+
+    var result = await dbContext.Blocks.OrderByDescending(b => b.Slot).FirstOrDefaultAsync();
 
     return Results.Ok(result);
 })
-.WithName("GetStakePoolUtxos")
+.WithName("GetLatestBlock")
 .WithOpenApi();
 
 app.UseCors();

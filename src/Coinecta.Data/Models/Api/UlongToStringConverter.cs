@@ -1,8 +1,7 @@
-using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Coinecta.API;
+namespace Coinecta.Models.Api;
 
 public class UlongToStringConverter : JsonConverter<ulong>
 {
