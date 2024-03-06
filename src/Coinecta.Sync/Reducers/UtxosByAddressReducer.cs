@@ -37,18 +37,26 @@ public class UtxosByAddressReducer(
         {
             foreach (TransactionInput input in txBody.Inputs)
             {
-                Cardano.Sync.Data.Models.TransactionOutput? resolvedInput = await _dbContext.TransactionOutputs
-                    .Where(o => o.Id == input.Id.ToHex())
-                    .Where(o => o.Index == input.Index)
+                // First check in-memory data
+                UtxoByAddress? utxoByAddress = _dbContext.UtxosByAddress.Local
+                    .Where(s => s.TxHash == input.Id.ToHex())
+                    .Where(s => s.TxIndex == input.Index)
+                    .FirstOrDefault();
+
+                // Then check the database
+                utxoByAddress ??= await _dbContext.UtxosByAddress
+                    .AsNoTracking()
+                    .Where(s => s.TxHash == input.Id.ToHex())
+                    .Where(s => s.TxIndex == input.Index)
                     .FirstOrDefaultAsync();
 
-                if (resolvedInput is not null && utxoAddresses!.Contains(resolvedInput.Address))
+                if (utxoByAddress is not null)
                 {
                     _dbContext.UtxosByAddress.Add(new()
                     {
-                        Address = resolvedInput.Address,
-                        TxHash = input.Id.ToHex(),
-                        TxIndex = input.Index,
+                        Address = utxoByAddress.Address,
+                        TxHash = utxoByAddress.TxHash,
+                        TxIndex = utxoByAddress.TxIndex,
                         Slot = response.Block.Slot,
                         Status = UtxoStatus.Spent
                     });
