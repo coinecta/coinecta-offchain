@@ -12,8 +12,6 @@ builder.Services.AddSingleton(new JsonSerializerOptions
     PropertyNameCaseInsensitive = true
 });
 
-builder.Services.AddHttpClient();
-
 builder.Services.AddHttpClient("SubmitApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["CardanoSubmitApiUrl"]!);
