@@ -72,6 +72,7 @@ public class Worker(
             await UpdateCurrentStakePoolsAsync(dbContext, stoppingToken);
 
             // Fetch current slot
+            _logger.LogInformation("Fetching Current Slot...");
             ulong currentSlot = await dbContext.Blocks
                 .AsNoTracking()
                 .Select(b => b.Slot).OrderByDescending(b => b)
@@ -95,6 +96,7 @@ public class Worker(
             await UpdateCurrentCertificateUtxoAsync(dbContext);
 
             // execute all transactions
+            _logger.LogInformation("Processing Stake Requests...");
             foreach (StakeRequestByAddress stakeRequest in pendingStakeRequests)
             {
                 StakePoolByAddress? stakePool = CatcherState.CurrentStakePoolStates!
@@ -120,12 +122,13 @@ public class Worker(
             }
 
             _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-            await Task.Delay(5_000, stoppingToken);
+            await Task.Delay(10_000, stoppingToken);
         }
     }
 
     private async Task UpdateCurrentStakePoolsAsync(CoinectaDbContext dbContext, CancellationToken stoppingToken)
     {
+        _logger.LogInformation("Fetching Stake Pools...");
         CatcherState.CurrentStakePoolStates = CatcherState.CurrentStakePoolStates ?? await dbContext.StakePoolByAddresses
             .AsNoTracking()
             .OrderByDescending(s => s.Slot)
@@ -140,6 +143,7 @@ public class Worker(
 
     private async Task<Utxo> GetUpdatedCertificateUtxoAsync(CoinectaDbContext dbContext)
     {
+        _logger.LogInformation("Fetching Certificate Utxo...");
         var result = await dbContext.UtxosByAddress
             .Where(u => u.Address == CatcherState.CatcherAddress.ToString())
             .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
@@ -171,6 +175,7 @@ public class Worker(
 
     private async Task<Utxo> GetUpdatedCollateralUtxoAsync(CoinectaDbContext dbContext)
     {
+        _logger.LogInformation("Fetching Collateral Utxo...");
         var result = await dbContext.UtxosByAddress
             .Where(u => u.Address == CatcherState.CatcherAddress.ToString())
             .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
@@ -201,6 +206,7 @@ public class Worker(
         CoinectaDbContext dbContext,
         CancellationToken stoppingToken)
     {
+        _logger.LogInformation("Processing Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
         ExecuteStakeRequest request = new()
         {
             StakePoolData = stakePool,
@@ -259,6 +265,7 @@ public class Worker(
         }
 
         // Add to Pending Execution
+        _logger.LogInformation("Updating states..");
         CatcherState.PendingExecutionStakeRequests.ToList().Add(new()
         {
             StakeRequestOutRef = new()
@@ -302,6 +309,6 @@ public class Worker(
 
         CatcherState.CurrentStakePoolStates[index] = updatedPool;
 
-        _logger.LogInformation("TxHash: {txHashDerived}", txHashDerived);
+        _logger.LogInformation("Tx Submitted: {txHashDerived}", txHashDerived);
     }
 }
