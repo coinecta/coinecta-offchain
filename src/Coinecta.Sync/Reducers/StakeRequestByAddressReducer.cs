@@ -79,7 +79,7 @@ public class StakeRequestByAddressReducer(
                     if (timelockOutput is not null)
                     {
                         var timelockOutputEntity = Utils.MapTransactionOutputEntity(txBody.Id.ToHex(), response.Block.Slot, timelockOutput);
-                        if(IsAssetAmountLocked(stakeRequest.Amount.MultiAsset, timelockOutputEntity.Amount.MultiAsset))
+                        if (IsAssetAmountLocked(stakeRequest.Amount.MultiAsset, timelockOutputEntity.Amount.MultiAsset))
                         {
                             stakeRequest.Status = StakeRequestStatus.Confirmed;
                         }
@@ -120,7 +120,7 @@ public class StakeRequestByAddressReducer(
                                 var stakeRequestByAddress = new StakeRequestByAddress
                                 {
                                     Address = AddressUtility.GetBaseAddress(
-                                        stakeProxyDatum.Destination.Address.Credential.Hash, 
+                                        stakeProxyDatum.Destination.Address.Credential.Hash,
                                         stakeProxyDatum.Destination.Address.StakeCredential!.Credential.Hash,
                                         configuration.GetValue<NetworkType>("CardanoNetworkMagic")).ToString(),
                                     Slot = response.Block.Slot,
