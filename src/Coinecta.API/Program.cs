@@ -241,7 +241,7 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
     ulong currentTimestamp = (ulong)dto.ToUnixTimeMilliseconds();
 
     // Get Stake Positions
-    List<Coinecta.Data.Models.Reducers.StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
+    List<StakePositionByStakeKey> stakePositions = await dbContext.StakePositionByStakeKeys.Where(s => stakeKeys.Contains(s.StakeKey)).ToListAsync();
 
     // Transaform Stake Positions
     var result = stakePositions.Select(sp =>
