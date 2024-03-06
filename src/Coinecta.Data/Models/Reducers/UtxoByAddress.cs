@@ -1,11 +1,7 @@
 
-namespace Coinecta.Data.Models.Reducers;
+using Coinecta.Data.Models.Enums;
 
-public enum UtxoStatus
-{
-    Unspent,
-    Spent
-}
+namespace Coinecta.Data.Models.Reducers;
 
 public class UtxoByAddress
 {

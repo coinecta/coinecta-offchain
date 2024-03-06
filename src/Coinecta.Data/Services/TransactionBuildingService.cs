@@ -42,6 +42,9 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         StakePoolByAddress stakePoolData = stakePools
             .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(request.StakePool.OwnerPkh, StringComparison.InvariantCultureIgnoreCase))
             .Where(sp => sp.Amount.MultiAsset.ContainsKey(request.StakePool.PolicyId) && sp.Amount.MultiAsset[request.StakePool.PolicyId].ContainsKey(request.StakePool.AssetName))
+            .GroupBy(sp => new { sp.TxHash, sp.TxIndex })
+            .Where(g => g.Count() < 2)
+            .Select(g => g.First())
             .FirstOrDefault() ?? throw new Exception("Stake pool not found");
 
         // Stake details
@@ -498,8 +501,11 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
                 .ToListAsync();
 
             stakePoolData = stakePools
-                .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(request.StakePool.OwnerPkh, StringComparison.InvariantCultureIgnoreCase))
+                .Where(sp => Convert.ToHexString(sp.StakePool.Owner.KeyHash).Equals(request.StakePool!.OwnerPkh, StringComparison.InvariantCultureIgnoreCase))
                 .Where(sp => sp.Amount.MultiAsset.ContainsKey(request.StakePool!.PolicyId) && sp.Amount.MultiAsset[request.StakePool.PolicyId].ContainsKey(request.StakePool.AssetName))
+                .GroupBy(sp => new { sp.TxHash, sp.TxIndex })
+                .Where(g => g.Count() < 2)
+                .Select(g => g.First())
                 .FirstOrDefault() ?? throw new Exception("Stake pool not found");
         }
 

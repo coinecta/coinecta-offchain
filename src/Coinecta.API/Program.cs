@@ -302,6 +302,21 @@ app.MapGet("/transaction/utxos", async (IDbContextFactory<CoinectaDbContext> dbC
 .WithName("GetUtxos")
 .WithOpenApi();
 
+app.MapGet("/transaction/stakepool/utxos", async (IDbContextFactory<CoinectaDbContext> dbContextFactory) =>
+{
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+    var result = await dbContext.StakePoolByAddresses
+        .Where(u => u.Address == "addr_test1wr2c6hf5sy9l6q6hh2qk3q7a360v5t27tk6k8d5lpfm973qw6ss82")
+        .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
+        .Where(g => g.Count() < 2)
+        .Select(g => g.First())
+        .ToListAsync();
+
+    return Results.Ok(result);
+})
+.WithName("GetStakePoolUtxos")
+.WithOpenApi();
+
 app.UseCors();
 
 app.Run();

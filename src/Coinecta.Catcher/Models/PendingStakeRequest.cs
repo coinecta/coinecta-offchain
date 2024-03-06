@@ -6,6 +6,6 @@ namespace Coinecta.Catcher.Models;
 
 public class PendingStakeRequest
 {
-    public OutputReference? StakeRequestOutRef { get; set; }
+    public string OutRef { get; set; } = default!;
     public ulong TTL { get; set; }
 }

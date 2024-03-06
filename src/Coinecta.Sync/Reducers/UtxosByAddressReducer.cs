@@ -3,6 +3,7 @@ using Cardano.Sync.Data.Models;
 using Cardano.Sync.Data.Models.Datums;
 using Cardano.Sync.Reducers;
 using Coinecta.Data;
+using Coinecta.Data.Models.Enums;
 using Coinecta.Data.Models.Reducers;
 using Microsoft.EntityFrameworkCore;
 using PallasDotnet.Models;
@@ -21,7 +22,7 @@ public class UtxosByAddressReducer(
     public async Task RollBackwardAsync(NextResponse response)
     {
         _dbContext = dbContextFactory.CreateDbContext();
-        var rollbackSlot = response.Block.Slot;
+        ulong rollbackSlot = response.Block.Slot;
         _dbContext.UtxosByAddress.RemoveRange(_dbContext.UtxosByAddress.Where(s => s.Slot > rollbackSlot));
         await _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
@@ -31,12 +32,12 @@ public class UtxosByAddressReducer(
     {
         _dbContext = dbContextFactory.CreateDbContext();
 
-        var utxoAddresses = JsonSerializer.Deserialize<List<string>>(configuration.GetValue<string>("UtxoAddresses")!);
-        foreach (var txBody in response.Block.TransactionBodies.ToList())
+        List<string>? utxoAddresses = JsonSerializer.Deserialize<List<string>>(configuration.GetValue<string>("UtxoAddresses")!);
+        foreach (TransactionBody? txBody in response.Block.TransactionBodies.ToList())
         {
-            foreach (var input in txBody.Inputs)
+            foreach (TransactionInput input in txBody.Inputs)
             {
-                var resolvedInput = await _dbContext.TransactionOutputs
+                Cardano.Sync.Data.Models.TransactionOutput? resolvedInput = await _dbContext.TransactionOutputs
                     .Where(o => o.Id == input.Id.ToHex())
                     .Where(o => o.Index == input.Index)
                     .FirstOrDefaultAsync();
@@ -54,7 +55,7 @@ public class UtxosByAddressReducer(
                 }
             }
 
-            foreach (var output in txBody.Outputs)
+            foreach (PallasDotnet.Models.TransactionOutput output in txBody.Outputs)
             {
                 if (utxoAddresses!.Contains(output.Address.ToBech32()))
                 {

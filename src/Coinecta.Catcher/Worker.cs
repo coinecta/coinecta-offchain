@@ -80,13 +80,16 @@ public class Worker(
 
             // Remove expired requests
             CatcherState.PendingExecutionStakeRequests = CatcherState.PendingExecutionStakeRequests
-               .Where(p => p.TTL <= currentSlot)
+               .Where(p => p.TTL > currentSlot)
                .ToList();
+
+            var pendingExecutionStakeRequestOutrefs = CatcherState.PendingExecutionStakeRequests
+                .Select(p => p.OutRef)
+                .ToList();
 
             // Get all stake requests that needs to be processed
             List<StakeRequestByAddress> pendingStakeRequests = stakeRequests
-                .Where(s => !CatcherState.PendingExecutionStakeRequests
-                .Any(p => p.StakeRequestOutRef!.TxHash + p.StakeRequestOutRef.TxHash == s.TxHash + s.TxIndex))
+                .Where(s => !pendingExecutionStakeRequestOutrefs.Contains(s.TxHash + s.TxIndex))
                 .ToList();
 
             // Collateral Utxo
@@ -96,7 +99,8 @@ public class Worker(
             await UpdateCurrentCertificateUtxoAsync(dbContext);
 
             // execute all transactions
-            _logger.LogInformation("Processing Stake Requests...");
+            var stakeRequestCount = pendingStakeRequests.Count;
+            _logger.LogInformation("Processing {stakeRequestCount} Stake Requests...", stakeRequestCount);
             foreach (StakeRequestByAddress stakeRequest in pendingStakeRequests)
             {
                 StakePoolByAddress? stakePool = CatcherState.CurrentStakePoolStates!
@@ -122,7 +126,7 @@ public class Worker(
             }
 
             _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-            await Task.Delay(10_000, stoppingToken);
+            await Task.Delay(5_000, stoppingToken);
         }
     }
 
@@ -130,10 +134,10 @@ public class Worker(
     {
         _logger.LogInformation("Fetching Stake Pools...");
         CatcherState.CurrentStakePoolStates = CatcherState.CurrentStakePoolStates ?? await dbContext.StakePoolByAddresses
-            .AsNoTracking()
-            .OrderByDescending(s => s.Slot)
-            .ToListAsync(cancellationToken: stoppingToken)
-                ?? [];
+            .GroupBy(u => new { u.TxHash, u.TxIndex })
+            .Where(g => g.Count() < 2)
+            .Select(g => g.First())
+            .ToListAsync(cancellationToken: stoppingToken) ?? [];
     }
 
     private async Task UpdateCurrentCertificateUtxoAsync(CoinectaDbContext dbContext)
@@ -266,13 +270,9 @@ public class Worker(
 
         // Add to Pending Execution
         _logger.LogInformation("Updating states..");
-        CatcherState.PendingExecutionStakeRequests.ToList().Add(new()
+        CatcherState.PendingExecutionStakeRequests.Add(new()
         {
-            StakeRequestOutRef = new()
-            {
-                TxHash = stakeRequest.TxHash,
-                Index = stakeRequest.TxIndex
-            },
+            OutRef = stakeRequest.TxHash + stakeRequest.TxIndex,
             TTL = (ulong)tx.TransactionBody.ValidBefore!
         });
 
