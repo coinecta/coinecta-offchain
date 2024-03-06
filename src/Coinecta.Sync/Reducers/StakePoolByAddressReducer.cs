@@ -7,7 +7,6 @@ using Coinecta.Data.Models.Datums;
 using Cardano.Sync.Reducers;
 using Coinecta.Data.Models.Reducers;
 using Cardano.Sync.Data.Models.Datums;
-using CardanoSharp.Wallet.Models;
 using Coinecta.Data.Models.Enums;
 
 namespace Coinecta.Sync.Reducers;

@@ -399,7 +399,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             Address = walletAddress.GetBytes(),
             Value = new()
             {
-                Coin = 0,
                 MultiAsset = walletBurnAssets.Build()
             }
         };
@@ -417,7 +416,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             Value = new()
             {
                 Coin = 5_000_000,
-                MultiAsset = []
             }
         };
 
