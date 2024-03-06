@@ -432,6 +432,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         });
         List<string> txInputOutrefs = txInputs.Select(i => Convert.ToHexString(i.TransactionId) + i.TransactionIndex).ToList();
         string timeLockValidatorScriptHash = configuration["CoinectaTimeLockValidatorScriptHash"]!;
+
         // Build Redeemers
         txInputs.ForEach(input =>
         {
