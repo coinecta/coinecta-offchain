@@ -20,11 +20,11 @@ public class CoinectaDbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<StakePoolByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex });
+        modelBuilder.Entity<StakePoolByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex, item.UtxoStatus });
         modelBuilder.Entity<StakePoolByAddress>().OwnsOne(item => item.Amount);
         modelBuilder.Entity<StakeRequestByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex });
         modelBuilder.Entity<StakeRequestByAddress>().OwnsOne(item => item.Amount);
-        modelBuilder.Entity<StakePositionByStakeKey>().HasKey(item => new { item.StakeKey, item.Slot, item.TxHash, item.TxIndex });
+        modelBuilder.Entity<StakePositionByStakeKey>().HasKey(item => new { item.StakeKey, item.Slot, item.TxHash, item.TxIndex, item.UtxoStatus });
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Amount);
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Interest);
         modelBuilder.Entity<UtxoByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex, item.Status });
