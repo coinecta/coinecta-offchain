@@ -8,6 +8,8 @@ using Coinecta.Data.Models.Response;
 using Coinecta.Data.Models.Api;
 using Coinecta.Data.Models.Api.Request;
 using Coinecta.Data.Services;
+using Coinecta.Data.Utils;
+using CardanoSharp.Wallet.Enums;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -106,7 +108,7 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
     stakePositions.ForEach(sp =>
     {
         // Remove NFT
-        sp.Amount.MultiAsset.Remove(configuration["CoinectaStakeKeyPolicyId"]!);
+        sp.Amount.MultiAsset.Remove(configuration["CoinectaStakeMintingPolicyId"]!);
         bool isLocked = sp.LockTime > currentTimestamp;
         string? policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
         Dictionary<string, ulong> asset = sp.Amount.MultiAsset[policyId!];
@@ -153,14 +155,21 @@ app.MapPost("/stake/requests/", async (
 
     var pagedData = await dbContext.StakeRequestByAddresses
         .Where(s => addresses.Contains(s.Address))
+        .OrderByDescending(s => s.Slot)
         .Skip(skip)
         .Take(limit)
         .ToListAsync();
 
     var totalCount = await dbContext.StakeRequestByAddresses
-                                    .CountAsync(s => addresses.Contains(s.Address));
+        .CountAsync(s => addresses.Contains(s.Address));
 
-    return Results.Ok(new { Total = totalCount, Data = pagedData });
+    var slotData = pagedData
+        .ToDictionary(
+            s => s.Slot,
+            s => CoinectaUtils.TimeFromSlot(NetworkType.Preview, (long)s.Slot)
+        );
+
+    return Results.Ok(new { Total = totalCount, Data = pagedData, Extra = new { SlotData = slotData } });
 })
 .WithName("GetStakeRequestsByAddresses")
 .WithOpenApi();
@@ -185,7 +194,7 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
     var result = stakePositions.Select(sp =>
     {
         // Remove NFT
-        sp.Amount.MultiAsset.Remove(configuration["CoinectaStakeKeyPolicyId"]!);
+        sp.Amount.MultiAsset.Remove(configuration["CoinectaStakeMintingPolicyId"]!);
 
         double interest = sp.Interest.Numerator / (double)sp.Interest.Denominator;
         string? policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();

@@ -19,6 +19,7 @@ using Microsoft.Extensions.Configuration;
 using Coinecta.Data.Migrations;
 using Coinecta.Data.Models.Reducers;
 using UtxoByAddress = Coinecta.Data.Models.Reducers.UtxoByAddress;
+using CardanoSharp.Wallet.Common;
 
 namespace Coinecta.Data.Utils;
 
@@ -291,4 +292,14 @@ public static class CoinectaUtils
 
         return yearString + monthString + dayString;
     }
+
+    public static SlotNetworkConfig SlotUtilityFromNetwork(NetworkType networkType) => networkType switch
+    {
+        NetworkType.Mainnet => SlotUtility.Mainnet,
+        NetworkType.Preview => SlotUtility.Preview,
+        NetworkType.Preprod => SlotUtility.Preprod,
+        _ => throw new NotImplementedException()
+    };
+
+    public static long TimeFromSlot(NetworkType network, long slot) => SlotUtility.GetPosixTimeSecondsFromSlot(CoinectaUtils.SlotUtilityFromNetwork(network), slot);
 }
