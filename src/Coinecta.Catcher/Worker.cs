@@ -52,7 +52,6 @@ public class Worker(
             .Derive(RoleType.Staking)
             .Derive(0);
 
-
         // Set Catcher States
         CatcherState.CatcherAddress = AddressUtility.GetBaseAddress(paymentNode.PublicKey, stakeNode.PublicKey, CoinectaUtils.GetNetworkType(configuration));
         CatcherState.CatcherPublicKey = paymentNode.PublicKey;
@@ -60,6 +59,8 @@ public class Worker(
         CatcherState.SubmitApiUrl = configuration["CardanoSubmitApiUrl"]!;
         CatcherState.CatcherCertificatePolicyId = configuration["CoinectaBatchingCertificatePolicyId"]!;
         CatcherState.CatcherCertificateAssetName = configuration["CoinectaBatchingCertificateAssetName"]!;
+
+        int pollingInterval = configuration.GetValue<int>("CoinectaStakeRequestPollingInterval") * 1_000;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -72,8 +73,8 @@ public class Worker(
 
             if (latestBlock is null)
             {
-                _logger.LogError("Error while fetching latest block. Retrying...");
-                await Task.Delay(5_000, stoppingToken);
+                _logger.LogError("Error while fetching latest block.");
+                await Task.Delay(pollingInterval, stoppingToken);
                 continue;
             }
 
@@ -95,8 +96,8 @@ public class Worker(
 
             if (pendingStakeRequests.Count == 0)
             {
-                _logger.LogInformation("No Stake Requests to process. Retrying...");
-                await Task.Delay(5_000, stoppingToken);
+                _logger.LogInformation("No Stake Requests to process.");
+                await Task.Delay(pollingInterval, stoppingToken);
                 continue;
             }
 
@@ -131,7 +132,7 @@ public class Worker(
             }
 
             _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-            await Task.Delay(5_000, stoppingToken);
+            await Task.Delay(pollingInterval, stoppingToken);
         }
     }
 
