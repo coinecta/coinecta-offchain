@@ -67,6 +67,8 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             rewardSetting.RewardMultiplier,
             stakePoolData.StakePool.PolicyId,
             stakePoolData.StakePool.AssetName,
+            request.AssetAmount,
+            request.LovelaceAmount,
             Convert.FromHexString(stakeMintingPolicyId));
         byte[] stakePoolProxyDatumCbor = CborConverter.Serialize(stakePoolProxyDatum);
 
@@ -85,7 +87,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         {
             Token = new()
             {
-                { stakePoolData.StakePool.AssetName, (long)request.Amount }
+                { stakePoolData.StakePool.AssetName, (long)request.AssetAmount }
             }
         });
 
@@ -354,7 +356,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         RedeemerBuilder? mintRedeemerBuilder = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Mint)
             .SetIndex(0)
-            .SetPlutusData(CBORObject.DecodeFromBytes(CborConvertor.Serialize(new StakeKeyMintRedeemer(0, 0))).GetPlutusData())
+            .SetPlutusData(CBORObject.DecodeFromBytes(CborConvertor.Serialize(new StakeKeyMintRedeemer(0, 0, false))).GetPlutusData())
             .SetExUnits(new ExUnits { Mem = 0, Steps = 0 }) as RedeemerBuilder;
 
         redeemerBuilders.Add(mintRedeemerBuilder!);
@@ -521,16 +523,16 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         string stakePoolAssetName = Convert.ToHexString(stakePoolAssetNameBytes).ToLower();
 
         // Reward
-        ulong stakeRequestAmount = stakeRequestData.Amount.MultiAsset[stakePoolPolicyId][stakePoolAssetName];
+        ulong stakeRequestAmount = stakeRequestData.StakePoolProxy.AssetAmount;
         ulong stakePoolBalance = stakePoolData.Amount.MultiAsset[stakePoolPolicyId][stakePoolAssetName];
         Rational stakeRequestRewardMultiplier = stakeRequestData.StakePoolProxy.RewardMultiplier;
         Rational stakeRequestAmountRational = new(stakeRequestAmount, 1);
         Rational stakeRequestTotalRewardRational = stakeRequestAmountRational * stakeRequestRewardMultiplier;
         ulong stakeRequestTotalReward = stakeRequestTotalRewardRational.Numerator / stakeRequestTotalRewardRational.Denominator;
         ulong rewardTotal = stakeRequestAmount + stakeRequestTotalReward;
-        BigInteger stakeRewardTotalRewardWithDecimals = BigInteger.Divide(rewardTotal, BigInteger.Pow(10, (int)stakePoolData.StakePool.Decimals));
         ulong stakePoolRemainingBalance = stakePoolBalance - stakeRequestTotalReward;
         int rewardIndex = stakePoolData.StakePool.RewardSettings.ToList().Select(r => r.RewardMultiplier).ToList().IndexOf(stakeRequestRewardMultiplier);
+        ulong timelockAssetAmount = stakeRequestTotalReward + stakeRequestAmount;
 
         // Addresses
         byte[] destinationPkh = stakeRequestData.StakePoolProxy.Destination.Address.Credential.Hash;
@@ -551,10 +553,9 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         ulong bufferDiff = validTimeInMs - currentTimeMs;
 
         // Metadata
-        string abbreviatedReward = CoinectaUtils.AbbreviateAmount(stakeRewardTotalRewardWithDecimals, 0);
         string assetNameUtf8 = Encoding.UTF8.GetString(stakePoolAssetNameBytes);
         string lockTimeDateString = CoinectaUtils.TimeToDateString((long)lockTime);
-        string metadataName = $"Stake NFT {abbreviatedReward} {assetNameUtf8} - {lockTimeDateString}";
+        string metadataName = $"Stake NFT {assetNameUtf8} - {lockTimeDateString}";
         byte[] outputRefCbor = CborConverter.Serialize(new OutputReference(Convert.FromHexString(stakePoolData.TxHash), stakePoolData.TxIndex));
         string outputRefCborHex = Convert.ToHexString(outputRefCbor).ToLower();
         string stakeNftAssetName = Convert.ToHexString(HashUtility.Blake2b256(Convert.FromHexString(outputRefCborHex)))[..56].ToLower();
@@ -564,7 +565,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         string stakeKeyImgUrl = configuration.GetValue<string>("CoinectaStakeKeyImgUrl")!;
         CIP68Metdata metadata = new(new()
         {
-            { "locked_amount", lockedAmount.ToString() },
+            { "locked_assets", $"[({stakePoolPolicyId}, {stakePoolAssetName}, {timelockAssetAmount})]" },
             { "name", metadataName },
             { "image", stakeKeyImgUrl }
         });
@@ -669,14 +670,14 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
 
         // Timelock Output
         ITokenBundleBuilder timelockTokenBundle = TokenBundleBuilder.Create;
-        timelockTokenBundle.AddToken(stakePoolPolicyIdBytes, stakePoolAssetNameBytes, (long)stakeRequestTotalReward + (long)stakeRequestAmount);
+        timelockTokenBundle.AddToken(stakePoolPolicyIdBytes, stakePoolAssetNameBytes, (long)timelockAssetAmount);
         timelockTokenBundle.AddToken(Convert.FromHexString(stakeMintingPolicy), Convert.FromHexString(referenceKeyPrefix + stakeNftAssetName), 1);
         txBodyBuilder.AddOutput(new TransactionOutput()
         {
             Address = timeLockValidatorAddress.GetBytes(),
             Value = new TransactionOutputValue()
             {
-                Coin = 2_500_000,
+                Coin = stakeRequestData.StakePoolProxy.LovelaceAmount,
                 MultiAsset = timelockTokenBundle.Build()
             },
             DatumOption = new()
@@ -685,7 +686,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             }
         });
 
-        attachedCoin -= 2_500_000;
+        attachedCoin -= stakeRequestData.StakePoolProxy.LovelaceAmount;
 
         // Destination Output
         ITokenBundleBuilder walletTokenBundle = TokenBundleBuilder.Create;
@@ -808,7 +809,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         RedeemerBuilder? mintRedeemer = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Mint)
             .SetIndex(0)
-            .SetPlutusData(CBORObject.DecodeFromBytes(CborConvertor.Serialize(new StakeKeyMintRedeemer((ulong)stakePoolIndex, 1))).GetPlutusData())
+            .SetPlutusData(CBORObject.DecodeFromBytes(CborConvertor.Serialize(new StakeKeyMintRedeemer((ulong)stakePoolIndex, 1, true))).GetPlutusData())
             .SetExUnits(new ExUnits { Mem = 730096, Steps = 268541674 }) as RedeemerBuilder;
 
         txBodyBuilder.SetScriptDataHash(
@@ -825,7 +826,8 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         Transaction tx = txBuilder
             .SetBody(txBodyBuilder)
             .SetWitnesses(txWitnesssetBuilder)
-            .BuildAndSetExUnits(network);
+            .Build();
+        //.BuildAndSetExUnits(network);
 
         uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
         tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
