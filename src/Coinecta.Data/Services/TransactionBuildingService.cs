@@ -821,16 +821,13 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         txWitnesssetBuilder.AddRedeemer(stakeProxyRedeemer!.Build());
         txWitnesssetBuilder.AddRedeemer(stakePoolRedeemer!.Build());
         txWitnesssetBuilder.AddRedeemer(mintRedeemer!.Build());
-
-        Transaction tx = txBuilder
+        
+         byte[] txBytes = txBuilder
             .SetBody(txBodyBuilder)
             .SetWitnesses(txWitnesssetBuilder)
-            .BuildAndSetExUnits(network);
+            .BuildStakeExecuteAndSetExUnits(network);
 
-        uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
-        tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
-        string unsignedTxCbor = Convert.ToHexString(tx.Serialize());
-
+        string unsignedTxCbor = Convert.ToHexString(txBytes);
         return unsignedTxCbor;
     }
 
