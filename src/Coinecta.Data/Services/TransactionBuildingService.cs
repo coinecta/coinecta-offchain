@@ -23,7 +23,6 @@ using Cardano.Sync.Data.Models.Datums;
 using CardanoSharp.Wallet.CIPs.CIP30.Extensions.Models;
 using CardanoSharp.Wallet.Common;
 using System.Text;
-using System.Numerics;
 using OutputReference = Cardano.Sync.Data.Models.Datums.OutputReference;
 using Coinecta.Data.Models.Api.Request;
 using Microsoft.Extensions.Configuration;

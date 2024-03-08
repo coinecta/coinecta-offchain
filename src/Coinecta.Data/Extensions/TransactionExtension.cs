@@ -10,6 +10,32 @@ namespace Coinecta.Data.Extensions;
 
 public static class TransactionExtension
 {
+
+    public static byte[] Serialize(this Transaction transaction, bool isStakeExecute)
+    {
+        if (isStakeExecute)
+        {
+            CborWriter txCborWriter = new();
+            var (txBodyBytes, txWitnessBytes) = SerializeStandard(transaction.Serialize());
+            txCborWriter.WriteStartArray(4);
+
+            // Write Transaction Body
+            txCborWriter.WriteEncodedValue(txBodyBytes);
+            txCborWriter.WriteEncodedValue(txWitnessBytes);
+
+            txCborWriter.WriteBoolean(true); // Metadata
+            txCborWriter.WriteNull(); // Auxiliary Data
+
+            txCborWriter.WriteEndArray();
+
+            return txCborWriter.Encode();
+        }
+        else
+        {
+            return transaction.Serialize();
+        }
+    }
+
     public static byte[] SignAndSerializeStakeExecuteTx(this Transaction transaction, VKeyWitness vkeyWitness)
     {
         CborWriter txCborWriter = new();
@@ -97,8 +123,9 @@ public static class TransactionExtension
         }
 
         txWitnessCborWriter.WriteEndArray();
+        txWitnessCborWriter.WriteEndMap();
 
-        return txWitnessBytes;
+        return txWitnessCborWriter.Encode();
     }
 
     private static (byte[], byte[]) SerializeStandard(byte[] txBytes)

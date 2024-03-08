@@ -17,6 +17,7 @@ using Coinecta.Catcher.Models;
 using Coinecta.Data.Models.Api.Request;
 using Coinecta.Data.Models.Reducers;
 using Coinecta.Data.Utils;
+using Coinecta.Data.Extensions;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 
 namespace Coinecta.Catcher;
@@ -316,18 +317,14 @@ public class Worker(
         HttpResponseMessage executeResponse = await CoinectaApi.PostAsync("transaction/stake/execute", executePayload, stoppingToken);
         string executeResponseJson = await executeResponse.Content.ReadAsStringAsync(stoppingToken);
         string unsignedTxCbor = JsonSerializer.Deserialize<string>(executeResponseJson)!;
-
         Transaction tx = Convert.FromHexString(unsignedTxCbor).DeserializeTransaction();
-        TransactionWitnessSetBuilder witnessSetBuilder = new();
 
-        witnessSetBuilder.AddVKeyWitness(new()
+        string signedTxCbor = Convert.ToHexString(tx.SignAndSerializeStakeExecuteTx(new()
         {
             VKey = CatcherState.CatcherPublicKey,
             SKey = CatcherState.CatcherPrivateKey
-        });
+        }));
 
-        tx.TransactionWitnessSet.VKeyWitnesses = witnessSetBuilder.Build().VKeyWitnesses;
-        string signedTxCbor = Convert.ToHexString(tx.Serialize(true));
         string txHashDerived = Convert.ToHexString(HashUtility.Blake2b256(tx.TransactionBody.GetCBOR(null).EncodeToBytes())).ToLowerInvariant();
 
         // Submit the transaction
