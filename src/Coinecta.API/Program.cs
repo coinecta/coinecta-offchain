@@ -254,8 +254,8 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
         Dictionary<string, ulong> asset = sp.Amount.MultiAsset[policyId!];
         string assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
         ulong total = asset.Values.FirstOrDefault();
-        double initial = total / (1 + interest);
-        double bonus = total - initial;
+        ulong initial = (ulong)(total / (1 + interest));
+        ulong bonus = total - initial;
         DateTimeOffset unlockDate = DateTimeOffset.FromUnixTimeMilliseconds((long)sp.LockTime);
 
         return new
@@ -265,9 +265,11 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
             UnlockDate = unlockDate,
             Initial = initial,
             Bonus = bonus,
-            Interest = interest
+            Interest = interest,
+            sp.TxHash,
+            sp.TxIndex
         };
-    });
+    }).OrderByDescending(sp => sp.UnlockDate).ToList();
 
     return Results.Ok(result);
 })
