@@ -1,11 +1,12 @@
 using System.Formats.Cbor;
 using Cardano.Sync.Data.Models.Datums;
 using CardanoSharp.Wallet.Models.Transactions;
+using CardanoSharp.Wallet.Extensions.Models.Transactions;
 using Coinecta.Data.Models.Datums;
 
 public static class TransactionBuilderExtension
 {
-    public static byte[] Serialize(this Transaction transaction, bool isStandard = true)
+    public static byte[] Serialize(this Transaction transaction, bool isStandard)
     {
         return isStandard
             ? SerializeStandard(transaction.Serialize())
@@ -367,7 +368,7 @@ public static class TransactionBuilderExtension
 
         // isValid
         cborWriter.WriteBoolean(true);
-        
+
         // Auxiliary Data
         cborWriter.WriteNull();
 

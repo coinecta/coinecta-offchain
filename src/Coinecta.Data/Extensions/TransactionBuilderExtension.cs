@@ -51,9 +51,10 @@ public static class TransactionBuilderExtension
         tx.TransactionWitnessSet.Redeemers = txEvalResults.Redeemers!;
         tx.TransactionBody.ScriptDataHash = ScriptUtility
             .GenerateScriptDataHash(txEvalResults.Redeemers!, datums, CostModelUtility.PlutusV2CostModel.Serialize());
-        
+
         uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
-        tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
+        tx.TransactionBody.Fee = fee + 500;
+        tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= tx.TransactionBody.Fee;
 
         return tx.Serialize(true);
     }

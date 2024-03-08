@@ -327,7 +327,7 @@ public class Worker(
         });
 
         tx.TransactionWitnessSet.VKeyWitnesses = witnessSetBuilder.Build().VKeyWitnesses;
-        string signedTxCbor = Convert.ToHexString(tx.Serialize());
+        string signedTxCbor = Convert.ToHexString(tx.Serialize(true));
         string txHashDerived = Convert.ToHexString(HashUtility.Blake2b256(tx.TransactionBody.GetCBOR(null).EncodeToBytes())).ToLowerInvariant();
 
         // Submit the transaction

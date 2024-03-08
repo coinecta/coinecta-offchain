@@ -595,11 +595,11 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         txBodyBuilder.AddReferenceInput(validatorRefInput);
 
         // Datums
-        byte[] timelockDatum = CborConverter.Serialize(new CIP68<Timelock>(metadata, 2, timelock));
+        byte[] timelockDatum = CborConverter.Serialize(new CIP68<Timelock>(metadata, 1, timelock));
 
         // Resolved Stake Pool Input
         ITokenBundleBuilder stakePoolTokenBundle = CoinectaUtils.GetTokenBundleFromAmount(stakePoolData.Amount.MultiAsset);
-        Data.Models.OutputReference stakePoolOutRef = new()
+        Models.OutputReference stakePoolOutRef = new()
         {
             TxHash = stakePoolData.TxHash,
             Index = (uint)stakePoolData.TxIndex
