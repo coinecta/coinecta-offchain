@@ -23,8 +23,8 @@ public static class TransactionExtension
             txCborWriter.WriteEncodedValue(txBodyBytes);
             txCborWriter.WriteEncodedValue(txWitnessBytes);
 
-            txCborWriter.WriteBoolean(true); // Metadata
-            txCborWriter.WriteNull(); // Auxiliary Data
+            txCborWriter.WriteBoolean(true);
+            txCborWriter.WriteNull();
 
             txCborWriter.WriteEndArray();
 
