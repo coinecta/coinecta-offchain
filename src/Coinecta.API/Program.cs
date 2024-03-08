@@ -192,6 +192,7 @@ app.MapPost("/stake/requests/", async (
         .CountAsync(s => addresses.Contains(s.Address));
 
     var slotData = pagedData
+        .DistinctBy(s => s.Slot)
         .ToDictionary(
             s => s.Slot,
             s => CoinectaUtils.TimeFromSlot(NetworkType.Preview, (long)s.Slot)
