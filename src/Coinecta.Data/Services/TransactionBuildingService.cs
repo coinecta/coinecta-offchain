@@ -67,8 +67,8 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             rewardSetting.RewardMultiplier,
             stakePoolData.StakePool.PolicyId,
             stakePoolData.StakePool.AssetName,
-            request.AssetAmount,
-            request.LovelaceAmount,
+            request.Amount,
+            3_000_000,
             Convert.FromHexString(stakeMintingPolicyId));
         byte[] stakePoolProxyDatumCbor = CborConverter.Serialize(stakePoolProxyDatum);
 
@@ -79,7 +79,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         // Validator output
         TransactionOutputValue stakePoolProxyOutputValue = new()
         {
-            Coin = 5_000_000,
+            Coin = 6_500_000,
             MultiAsset = []
         };
 
@@ -87,7 +87,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         {
             Token = new()
             {
-                { stakePoolData.StakePool.AssetName, (long)request.AssetAmount }
+                { stakePoolData.StakePool.AssetName, (long)request.Amount }
             }
         });
 
@@ -563,9 +563,10 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         // Timelock Metadata
         ulong lockedAmount = stakeRequestTotalReward + stakeRequestAmount;
         string stakeKeyImgUrl = configuration.GetValue<string>("CoinectaStakeKeyImgUrl")!;
+        string lockedAssets = $"[({stakePoolPolicyId},{stakePoolAssetName},{timelockAssetAmount})]";
         CIP68Metdata metadata = new(new()
         {
-            { "locked_assets", $"[({stakePoolPolicyId}, {stakePoolAssetName}, {timelockAssetAmount})]" },
+            { "locked_assets", lockedAssets },
             { "name", metadataName },
             { "image", stakeKeyImgUrl }
         });
@@ -594,7 +595,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         txBodyBuilder.AddReferenceInput(validatorRefInput);
 
         // Datums
-        byte[] timelockDatum = CborConverter.Serialize(new CIP68<Timelock>(metadata, 1, timelock));
+        byte[] timelockDatum = CborConverter.Serialize(new CIP68<Timelock>(metadata, 2, timelock));
 
         // Resolved Stake Pool Input
         ITokenBundleBuilder stakePoolTokenBundle = CoinectaUtils.GetTokenBundleFromAmount(stakePoolData.Amount.MultiAsset);
@@ -622,7 +623,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
 
         // Resolved Stake Proxy Input 
         ITokenBundleBuilder stakeProxyTokenBundle = CoinectaUtils.GetTokenBundleFromAmount(stakeRequestData.Amount.MultiAsset);
-        Data.Models.OutputReference stakeProxyOutRef = new()
+        Models.OutputReference stakeProxyOutRef = new()
         {
             TxHash = stakeRequestData.TxHash,
             Index = (uint)stakeRequestData.TxIndex
@@ -677,7 +678,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             Address = timeLockValidatorAddress.GetBytes(),
             Value = new TransactionOutputValue()
             {
-                Coin = stakeRequestData.StakePoolProxy.LovelaceAmount,
+                Coin = 3_000_000,
                 MultiAsset = timelockTokenBundle.Build()
             },
             DatumOption = new()
@@ -686,7 +687,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             }
         });
 
-        attachedCoin -= stakeRequestData.StakePoolProxy.LovelaceAmount;
+        attachedCoin -= 3_000_000;
 
         // Destination Output
         ITokenBundleBuilder walletTokenBundle = TokenBundleBuilder.Create;
@@ -826,8 +827,8 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         Transaction tx = txBuilder
             .SetBody(txBodyBuilder)
             .SetWitnesses(txWitnesssetBuilder)
+            //.BuildAndSetExUnits(network);
             .Build();
-        //.BuildAndSetExUnits(network);
 
         uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
         tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;

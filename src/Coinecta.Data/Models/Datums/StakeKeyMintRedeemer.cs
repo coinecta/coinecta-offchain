@@ -4,13 +4,7 @@ using CborSerialization;
 
 namespace Coinecta.Data.Models.Datums;
 
-/*
-121_0([_
-    121_0([_
-        h'cb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3',
-    ]),
-])
-*/
+/* 121_0([_ 0, 1, 122_0([])]) */
 [CborSerialize(typeof(StakeKeyMintRedeemerCborConvert))]
 public record StakeKeyMintRedeemer(ulong StakePoolindex, ulong TimeLockIndex, bool Mint) : IDatum;
 
@@ -33,7 +27,6 @@ public class StakeKeyMintRedeemerCborConvert : ICborConvertor<StakeKeyMintRedeem
         }
         var mint = mintTag == (CborTag)122;
         reader.ReadStartArray();
-        reader.ReadSimpleValue();
         reader.ReadEndArray();
         reader.ReadEndArray();
         return new StakeKeyMintRedeemer(stakePoolIndex, timeLockIndex, mint);
@@ -54,9 +47,8 @@ public class StakeKeyMintRedeemerCborConvert : ICborConvertor<StakeKeyMintRedeem
         {
             writer.WriteTag((CborTag)121);
         }
-        // writer.WriteStartArray(1);
-        // writer.WriteSimpleValue(CborSimpleValue);
-        // writer.WriteEndArray();
+        writer.WriteStartArray(0);
+        writer.WriteEndArray();
         writer.WriteEndArray();
     }
 }

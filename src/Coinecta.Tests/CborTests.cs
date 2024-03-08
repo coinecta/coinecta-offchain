@@ -1,6 +1,10 @@
 using Cardano.Sync.Data.Models.Datums;
 using CborSerialization;
 using Coinecta.Data.Models.Datums;
+using Dahomey.Cbor;
+using Dahomey.Cbor.ObjectModel;
+using PeterO.Cbor;
+using PeterO.Cbor2;
 using StakeCredential = Cardano.Sync.Data.Models.Datums.StakeCredential;
 
 namespace Coinecta.Tests;
@@ -175,5 +179,38 @@ public class CborTests
 
         var timelockCborHex = Convert.ToHexString(CborConverter.Serialize(timelock)).ToLowerInvariant();
         Assert.Equal("d8799fa24d6c6f636b65645f616d6f756e744431303030446e616d65581a5374616b65204e465420314b20434e4354202d2032343031323301d8799f1903e858206c00ac8ecdbfad86c9287b2aec257f2e3875b572de8d8df27fd94dd650671c94ffff", timelockCborHex);
+    }
+
+    [Fact]
+    public void StakeKeyMintRedeemerCborTest()
+    {
+        var mintRedeemer = new StakeKeyMintRedeemer(0, 1, true);
+        var serializedMintRedeemer = CborConverter.Serialize(mintRedeemer);
+
+    }
+
+    [Fact]
+    public void CIP68MetataLongValuesCborTest()
+    {
+        var cip68Metadata = new CIP68Metdata(
+            new Dictionary<string, string>
+            {
+                { "locked_assets", "[(8b05e87a51c1d4a0fa888d2bb14dbc25e8c343ea379a171b63aa84a0,434e4354,1050)]" },
+            }
+        );
+        var timelock = new Timelock(0, []);
+        var cip68 = new CIP68<Timelock>(
+            cip68Metadata,
+            1,
+            timelock
+        );
+
+        var cip68MetadataCborHex = Convert.ToHexString(CborConverter.Serialize(cip68Metadata)).ToLowerInvariant();
+        var cip68CborHex = Convert.ToHexString(CborConverter.Serialize(cip68)).ToLowerInvariant();
+        var testCb = "5f58405b2838623035653837613531633164346130666138383864326262313464626332356538633334336561333739613137316236336161383461302c34333465344a3335342c31303530295dff";
+        var test = PeterO.Cbor2.CBORObject
+            .DecodeFromBytes(
+                Convert.FromHexString(testCb), new PeterO.Cbor2.CBOREncodeOptions("useindeflengthstrings=true"));
+        var testCbor = Convert.ToHexString(test.EncodeToBytes(new PeterO.Cbor2.CBOREncodeOptions("useindeflengthstrings=true"))).ToLowerInvariant();
     }
 }
