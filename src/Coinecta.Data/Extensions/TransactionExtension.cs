@@ -1,155 +1,243 @@
 using System.Formats.Cbor;
 using Cardano.Sync.Data.Models.Datums;
-using CardanoSharp.Wallet.Models.Transactions;
+using CardanoSharp.Wallet.Extensions.Models;
 using CardanoSharp.Wallet.Extensions.Models.Transactions;
+using CardanoSharp.Wallet.Models.Transactions;
+using CardanoSharp.Wallet.Utilities;
 using Coinecta.Data.Models.Datums;
 
-public static class TransactionBuilderExtension
+namespace Coinecta.Data.Extensions;
+
+public static class TransactionExtension
 {
-    public static byte[] Serialize(this Transaction transaction, bool isStandard)
+    public static byte[] SignAndSerializeStakeExecuteTx(this Transaction transaction, VKeyWitness vkeyWitness)
     {
-        return isStandard
-            ? SerializeStandard(transaction.Serialize())
-            : transaction.Serialize();
+        CborWriter txCborWriter = new();
+        var (txBodyBytes, txWitnessBytes) = SerializeStandard(transaction.Serialize());
+        var txHash = HashUtility.Blake2b256(txBodyBytes);
+        var pubKey = vkeyWitness.VKey.Key;
+        var signature = vkeyWitness.SKey.Sign(txHash);
+        txCborWriter.WriteStartArray(4);
+
+        // Write Transaction Body
+        txCborWriter.WriteEncodedValue(txBodyBytes);
+        txCborWriter.WriteEncodedValue(InsertVkeyToWitness(txWitnessBytes, pubKey, signature));
+
+        txCborWriter.WriteBoolean(true); // Metadata
+        txCborWriter.WriteNull(); // Auxiliary Data
+
+        txCborWriter.WriteEndArray();
+
+        return txCborWriter.Encode();
     }
 
-    private static byte[] SerializeStandard(byte[] txBytes)
+    public static byte[] InsertVkeyToWitness(byte[] txWitnessBytes, byte[] newVkey, byte[] newSignature)
+    {
+        CborReader cborReader = new(txWitnessBytes);
+        CborWriter txWitnessCborWriter = new();
+        List<(byte[], byte[])> vkeyWitnesses = [];
+        List<byte[]> redeemerWitnesses = [];
+
+        // Insert Vkey Witness
+        vkeyWitnesses.Add((newVkey, newSignature));
+
+        var witnessMapLength = cborReader.ReadStartMap();
+
+        for (int a = 0; a < witnessMapLength; a++)
+        {
+            var witnessKey = cborReader.ReadUInt64();
+
+            switch (witnessKey)
+            {
+                case 0:
+                    var vkeyWitnessLength = cborReader.ReadStartArray();
+
+                    for (int b = 0; b < vkeyWitnessLength; b++)
+                    {
+                        cborReader.ReadStartArray();
+                        var vkey = cborReader.ReadByteString();
+                        var signature = cborReader.ReadByteString();
+                        vkeyWitnesses.Add((vkey, signature));
+                        cborReader.ReadEndArray();
+                    }
+
+                    cborReader.ReadEndArray();
+                    break;
+                case 5:
+                    var redeemerWitnessLength = cborReader.ReadStartArray();
+                    for (int b = 0; b < redeemerWitnessLength; b++)
+                    {
+                        var redeemerEncodedValue = cborReader.ReadEncodedValue().Span;
+                        redeemerWitnesses.Add(redeemerEncodedValue.ToArray());
+                    }
+                    break;
+            }
+        }
+
+        txWitnessCborWriter.WriteStartMap(2);
+        txWitnessCborWriter.WriteUInt64(0);
+        txWitnessCborWriter.WriteStartArray(vkeyWitnesses.Count);
+
+        foreach (var (vkey, signature) in vkeyWitnesses)
+        {
+            txWitnessCborWriter.WriteStartArray(2);
+            txWitnessCborWriter.WriteByteString(vkey);
+            txWitnessCborWriter.WriteByteString(signature);
+            txWitnessCborWriter.WriteEndArray();
+        }
+
+        txWitnessCborWriter.WriteEndArray();
+
+        txWitnessCborWriter.WriteUInt64(5);
+        txWitnessCborWriter.WriteStartArray(redeemerWitnesses.Count);
+
+        foreach (var redeemer in redeemerWitnesses)
+        {
+            txWitnessCborWriter.WriteEncodedValue(redeemer);
+        }
+
+        txWitnessCborWriter.WriteEndArray();
+
+        return txWitnessBytes;
+    }
+
+    private static (byte[], byte[]) SerializeStandard(byte[] txBytes)
     {
         CborReader cborReader = new(txBytes);
-        CborWriter cborWriter = new();
+        CborWriter txBodyCborWriter = new();
+        CborWriter txWitnessCborWriter = new();
 
         // Start of Tx
         cborReader.ReadStartArray();
-        cborWriter.WriteStartArray(4);
 
         // Start of TxBody
         int? txBodyMapLength = cborReader.ReadStartMap();
-        cborWriter.WriteStartMap(txBodyMapLength);
+        txBodyCborWriter.WriteStartMap(txBodyMapLength);
         for (int a = 0; a < txBodyMapLength; a++)
         {
             var txBodyKey = cborReader.ReadUInt64();
-            cborWriter.WriteUInt64(txBodyKey);
+            txBodyCborWriter.WriteUInt64(txBodyKey);
             switch (txBodyKey)
             {
                 case 0: // Inputs
                     var txInputLength = cborReader.ReadStartArray();
-                    cborWriter.WriteStartArray(txInputLength);
+                    txBodyCborWriter.WriteStartArray(txInputLength);
 
                     for (int b = 0; b < txInputLength; b++)
                     {
                         cborReader.ReadStartArray();
-                        cborWriter.WriteStartArray(2);
+                        txBodyCborWriter.WriteStartArray(2);
                         var txInputHash = cborReader.ReadByteString();
-                        cborWriter.WriteByteString(txInputHash);
+                        txBodyCborWriter.WriteByteString(txInputHash);
                         var txInputIndex = cborReader.ReadUInt64();
-                        cborWriter.WriteUInt64(txInputIndex);
+                        txBodyCborWriter.WriteUInt64(txInputIndex);
                         cborReader.ReadEndArray();
-                        cborWriter.WriteEndArray();
+                        txBodyCborWriter.WriteEndArray();
                     }
 
                     cborReader.ReadEndArray();
-                    cborWriter.WriteEndArray();
+                    txBodyCborWriter.WriteEndArray();
 
                     break;
                 case 1: // Outputs
                     var txOutputLength = cborReader.ReadStartArray();
-                    cborWriter.WriteStartArray(txOutputLength);
+                    txBodyCborWriter.WriteStartArray(txOutputLength);
                     for (int b = 0; b < txOutputLength; b++)
                     {
                         var outputTypeState = cborReader.PeekState();
                         if (outputTypeState == CborReaderState.StartMap)
                         {
                             var txOutputMapLength = cborReader.ReadStartMap();
-                            cborWriter.WriteStartMap(txOutputMapLength);
+                            txBodyCborWriter.WriteStartMap(txOutputMapLength);
 
                             // Read Address Bytes
                             var addressKey = cborReader.ReadUInt64();
-                            cborWriter.WriteUInt64(addressKey);
+                            txBodyCborWriter.WriteUInt64(addressKey);
 
                             var addressBytes = cborReader.ReadByteString();
-                            cborWriter.WriteByteString(addressBytes);
+                            txBodyCborWriter.WriteByteString(addressBytes);
 
                             // Read Output Value / Amount
                             var valueKey = cborReader.ReadUInt64();
-                            cborWriter.WriteUInt64(valueKey);
+                            txBodyCborWriter.WriteUInt64(valueKey);
 
                             cborReader.ReadStartArray();
-                            cborWriter.WriteStartArray(2);
+                            txBodyCborWriter.WriteStartArray(2);
 
                             var lovelace = cborReader.ReadUInt64();
-                            cborWriter.WriteUInt64(lovelace);
+                            txBodyCborWriter.WriteUInt64(lovelace);
 
                             var multiAssetMapLength = cborReader.ReadStartMap();
-                            cborWriter.WriteStartMap(multiAssetMapLength);
+                            txBodyCborWriter.WriteStartMap(multiAssetMapLength);
 
                             for (int c = 0; c < multiAssetMapLength; c++)
                             {
                                 // Read Policy Id
                                 var policyId = cborReader.ReadByteString();
-                                cborWriter.WriteByteString(policyId);
+                                txBodyCborWriter.WriteByteString(policyId);
 
                                 var assetsMapLength = cborReader.ReadStartMap();
-                                cborWriter.WriteStartMap(assetsMapLength);
+                                txBodyCborWriter.WriteStartMap(assetsMapLength);
 
                                 for (int d = 0; d < assetsMapLength; d++)
                                 {
                                     var assetName = cborReader.ReadByteString();
-                                    cborWriter.WriteByteString(assetName);
+                                    txBodyCborWriter.WriteByteString(assetName);
 
                                     var assetValue = cborReader.ReadUInt64();
-                                    cborWriter.WriteUInt64(assetValue);
+                                    txBodyCborWriter.WriteUInt64(assetValue);
                                 }
 
                                 cborReader.ReadEndMap();
-                                cborWriter.WriteEndMap();
+                                txBodyCborWriter.WriteEndMap();
                             }
 
                             cborReader.ReadEndMap();
-                            cborWriter.WriteEndMap();
+                            txBodyCborWriter.WriteEndMap();
 
                             cborReader.ReadEndArray();
-                            cborWriter.WriteEndArray();
+                            txBodyCborWriter.WriteEndArray();
 
                             if (txOutputMapLength == 3)
                             {
                                 var datumKey = cborReader.ReadUInt64();
-                                cborWriter.WriteUInt64(datumKey);
+                                txBodyCborWriter.WriteUInt64(datumKey);
 
                                 // Read the Datum
                                 cborReader.ReadStartArray();
-                                cborWriter.WriteStartArray(2);
+                                txBodyCborWriter.WriteStartArray(2);
 
                                 var datumType = cborReader.ReadUInt64();
-                                cborWriter.WriteUInt64(datumType);
+                                txBodyCborWriter.WriteUInt64(datumType);
 
                                 var datumBytesTag = cborReader.ReadTag();
-                                cborWriter.WriteTag(datumBytesTag);
+                                txBodyCborWriter.WriteTag(datumBytesTag);
 
                                 var datumBytes = cborReader.ReadByteString();
                                 if (b == 1)
                                 {
                                     var timelockCIP68 = CborConverter.Deserialize<CIP68<Timelock>>(datumBytes);
-                                    cborWriter.WriteByteString(CborConverter.Serialize(timelockCIP68));
+                                    txBodyCborWriter.WriteByteString(CborConverter.Serialize(timelockCIP68));
                                 }
                                 else
                                 {
-                                    cborWriter.WriteByteString(datumBytes);
+                                    txBodyCborWriter.WriteByteString(datumBytes);
                                 }
 
                                 cborReader.ReadEndArray();
-                                cborWriter.WriteEndArray();
+                                txBodyCborWriter.WriteEndArray();
                             }
 
                             cborReader.ReadEndMap();
-                            cborWriter.WriteEndMap();
+                            txBodyCborWriter.WriteEndMap();
                         }
                         else if (outputTypeState == CborReaderState.StartArray)
                         {
                             cborReader.ReadStartArray();
-                            cborWriter.WriteStartArray(2);
+                            txBodyCborWriter.WriteStartArray(2);
 
                             var addressBytes = cborReader.ReadByteString();
-                            cborWriter.WriteByteString(addressBytes);
+                            txBodyCborWriter.WriteByteString(addressBytes);
 
                             var valuePeekState = cborReader.PeekState();
 
@@ -157,277 +245,217 @@ public static class TransactionBuilderExtension
                             {
                                 // Read Output Value / Amount
                                 cborReader.ReadStartArray();
-                                cborWriter.WriteStartArray(2);
+                                txBodyCborWriter.WriteStartArray(2);
 
                                 var lovelace = cborReader.ReadUInt64();
-                                cborWriter.WriteUInt64(lovelace);
+                                txBodyCborWriter.WriteUInt64(lovelace);
 
                                 var multiAssetMapLength = cborReader.ReadStartMap();
-                                cborWriter.WriteStartMap(multiAssetMapLength);
+                                txBodyCborWriter.WriteStartMap(multiAssetMapLength);
 
                                 for (int c = 0; c < multiAssetMapLength; c++)
                                 {
                                     // Read Policy Id
                                     var policyId = cborReader.ReadByteString();
-                                    cborWriter.WriteByteString(policyId);
+                                    txBodyCborWriter.WriteByteString(policyId);
 
                                     var assetsMapLength = cborReader.ReadStartMap();
-                                    cborWriter.WriteStartMap(assetsMapLength);
+                                    txBodyCborWriter.WriteStartMap(assetsMapLength);
 
                                     for (int d = 0; d < assetsMapLength; d++)
                                     {
                                         var assetName = cborReader.ReadByteString();
-                                        cborWriter.WriteByteString(assetName);
+                                        txBodyCborWriter.WriteByteString(assetName);
 
                                         var assetValue = cborReader.ReadUInt64();
-                                        cborWriter.WriteUInt64(assetValue);
+                                        txBodyCborWriter.WriteUInt64(assetValue);
                                     }
 
                                     cborReader.ReadEndMap();
-                                    cborWriter.WriteEndMap();
+                                    txBodyCborWriter.WriteEndMap();
                                 }
 
                                 cborReader.ReadEndMap();
-                                cborWriter.WriteEndMap();
+                                txBodyCborWriter.WriteEndMap();
 
                                 cborReader.ReadEndArray();
-                                cborWriter.WriteEndArray();
+                                txBodyCborWriter.WriteEndArray();
                             }
                             else if (valuePeekState == CborReaderState.UnsignedInteger)
                             {
                                 var lovelace = cborReader.ReadUInt64();
-                                cborWriter.WriteUInt64(lovelace);
+                                txBodyCborWriter.WriteUInt64(lovelace);
                             }
 
                             cborReader.ReadEndArray();
-                            cborWriter.WriteEndArray();
+                            txBodyCborWriter.WriteEndArray();
                         }
                     }
 
                     cborReader.ReadEndArray();
-                    cborWriter.WriteEndArray();
+                    txBodyCborWriter.WriteEndArray();
                     break;
                 case 2: // Fee
                     var feeInLovelace = cborReader.ReadUInt64();
-                    cborWriter.WriteUInt64(feeInLovelace);
+                    txBodyCborWriter.WriteUInt64(feeInLovelace);
                     break;
                 case 3: // Valid Before TTL
                     var validBefore = cborReader.ReadUInt64();
-                    cborWriter.WriteUInt64(validBefore);
+                    txBodyCborWriter.WriteUInt64(validBefore);
                     break;
                 case 8: // Valid After
                     var validAfter = cborReader.ReadUInt64();
-                    cborWriter.WriteUInt64(validAfter);
+                    txBodyCborWriter.WriteUInt64(validAfter);
                     break;
                 case 9: // Mint (Map for Multi Assets to be minted)
                     var mintMapLength = cborReader.ReadStartMap();
-                    cborWriter.WriteStartMap(mintMapLength);
+                    txBodyCborWriter.WriteStartMap(mintMapLength);
                     for (int b = 0; b < mintMapLength; b++)
                     {
                         var policyId = cborReader.ReadByteString();
-                        cborWriter.WriteByteString(policyId);
+                        txBodyCborWriter.WriteByteString(policyId);
 
                         var assetsMapLength = cborReader.ReadStartMap();
-                        cborWriter.WriteStartMap(assetsMapLength);
+                        txBodyCborWriter.WriteStartMap(assetsMapLength);
 
                         for (int c = 0; c < assetsMapLength; c++)
                         {
                             var assetName = cborReader.ReadByteString();
-                            cborWriter.WriteByteString(assetName);
+                            txBodyCborWriter.WriteByteString(assetName);
 
                             var assetValue = cborReader.ReadUInt64();
-                            cborWriter.WriteUInt64(assetValue);
+                            txBodyCborWriter.WriteUInt64(assetValue);
                         }
 
                         cborReader.ReadEndMap();
-                        cborWriter.WriteEndMap();
+                        txBodyCborWriter.WriteEndMap();
                     }
                     cborReader.ReadEndMap();
-                    cborWriter.WriteEndMap();
+                    txBodyCborWriter.WriteEndMap();
                     break;
                 case 11: // Script Data Hash
                     var scriptDataHash = cborReader.ReadByteString();
-                    cborWriter.WriteByteString(scriptDataHash);
+                    txBodyCborWriter.WriteByteString(scriptDataHash);
                     break;
                 case 13: // Collateral Inputs
                     var collateralInputsLength = cborReader.ReadStartArray();
-                    cborWriter.WriteStartArray(collateralInputsLength);
+                    txBodyCborWriter.WriteStartArray(collateralInputsLength);
                     for (int b = 0; b < collateralInputsLength; b++)
                     {
                         cborReader.ReadStartArray();
-                        cborWriter.WriteStartArray(2);
+                        txBodyCborWriter.WriteStartArray(2);
                         var txInputHash = cborReader.ReadByteString();
-                        cborWriter.WriteByteString(txInputHash);
+                        txBodyCborWriter.WriteByteString(txInputHash);
                         var txInputIndex = cborReader.ReadUInt64();
-                        cborWriter.WriteUInt64(txInputIndex);
+                        txBodyCborWriter.WriteUInt64(txInputIndex);
                         cborReader.ReadEndArray();
-                        cborWriter.WriteEndArray();
+                        txBodyCborWriter.WriteEndArray();
                     }
                     cborReader.ReadEndArray();
-                    cborWriter.WriteEndArray();
+                    txBodyCborWriter.WriteEndArray();
                     break;
                 case 18: // Reference Inputs
                     var referenceInputsLength = cborReader.ReadStartArray();
-                    cborWriter.WriteStartArray(referenceInputsLength);
+                    txBodyCborWriter.WriteStartArray(referenceInputsLength);
                     for (int b = 0; b < referenceInputsLength; b++)
                     {
                         cborReader.ReadStartArray();
-                        cborWriter.WriteStartArray(2);
+                        txBodyCborWriter.WriteStartArray(2);
                         var txInputHash = cborReader.ReadByteString();
-                        cborWriter.WriteByteString(txInputHash);
+                        txBodyCborWriter.WriteByteString(txInputHash);
                         var txInputIndex = cborReader.ReadUInt64();
-                        cborWriter.WriteUInt64(txInputIndex);
+                        txBodyCborWriter.WriteUInt64(txInputIndex);
                         cborReader.ReadEndArray();
-                        cborWriter.WriteEndArray();
+                        txBodyCborWriter.WriteEndArray();
                     }
                     cborReader.ReadEndArray();
-                    cborWriter.WriteEndArray();
+                    txBodyCborWriter.WriteEndArray();
                     break;
             }
         }
 
         // End of Tx Body
         cborReader.ReadEndMap();
-        cborWriter.WriteEndMap();
+        txBodyCborWriter.WriteEndMap();
 
         // Witness Sets
         var witnessMapLength = cborReader.ReadStartMap();
-        cborWriter.WriteStartMap(witnessMapLength);
+        txWitnessCborWriter.WriteStartMap(witnessMapLength);
 
         for (int a = 0; a < witnessMapLength; a++)
         {
             var witnessKey = cborReader.ReadUInt64();
-            cborWriter.WriteUInt64(witnessKey);
+            txWitnessCborWriter.WriteUInt64(witnessKey);
 
             switch (witnessKey)
             {
                 case 0:
                     var vkeyWitnessLength = cborReader.ReadStartArray();
-                    cborWriter.WriteStartArray(vkeyWitnessLength);
+                    txWitnessCborWriter.WriteStartArray(vkeyWitnessLength);
 
                     for (int b = 0; b < vkeyWitnessLength; b++)
                     {
                         cborReader.ReadStartArray();
-                        cborWriter.WriteStartArray(2);
+                        txWitnessCborWriter.WriteStartArray(2);
                         var vkey = cborReader.ReadByteString();
-                        cborWriter.WriteByteString(vkey);
+                        txWitnessCborWriter.WriteByteString(vkey);
                         var signature = cborReader.ReadByteString();
-                        cborWriter.WriteByteString(signature);
+                        txWitnessCborWriter.WriteByteString(signature);
                         cborReader.ReadEndArray();
-                        cborWriter.WriteEndArray();
+                        txWitnessCborWriter.WriteEndArray();
                     }
 
                     cborReader.ReadEndArray();
-                    cborWriter.WriteEndArray();
+                    txWitnessCborWriter.WriteEndArray();
                     break;
                 case 5:
                     var redeemerWitnessLength = cborReader.ReadStartArray();
-                    cborWriter.WriteStartArray(redeemerWitnessLength);
+                    txWitnessCborWriter.WriteStartArray(redeemerWitnessLength);
 
                     for (int b = 0; b < redeemerWitnessLength; b++)
                     {
                         // Start of Redeemer Witness
                         cborReader.ReadStartArray();
-                        cborWriter.WriteStartArray(4);
+                        txWitnessCborWriter.WriteStartArray(4);
 
                         var redeemerTag = cborReader.ReadUInt64();
-                        cborWriter.WriteUInt64(redeemerTag);
+                        txWitnessCborWriter.WriteUInt64(redeemerTag);
 
                         var redeemerIndex = cborReader.ReadUInt64();
-                        cborWriter.WriteUInt64(redeemerIndex);
+                        txWitnessCborWriter.WriteUInt64(redeemerIndex);
 
                         // Write Redeemer Data
-                        CopyNextElement(cborReader, cborWriter);
+                        txWitnessCborWriter.WriteEncodedValue(cborReader.ReadEncodedValue().Span);
 
                         // ExUnits
                         cborReader.ReadStartArray();
-                        cborWriter.WriteStartArray(2);
+                        txWitnessCborWriter.WriteStartArray(2);
 
                         var mem = cborReader.ReadUInt64();
-                        cborWriter.WriteUInt64(mem);
+                        txWitnessCborWriter.WriteUInt64(mem);
 
                         var steps = cborReader.ReadUInt64();
-                        cborWriter.WriteUInt64(steps);
+                        txWitnessCborWriter.WriteUInt64(steps);
 
                         cborReader.ReadEndArray();
-                        cborWriter.WriteEndArray();
+                        txWitnessCborWriter.WriteEndArray();
 
                         // End of Redeemer Witness
                         cborReader.ReadEndArray();
-                        cborWriter.WriteEndArray();
+                        txWitnessCborWriter.WriteEndArray();
                     }
 
                     cborReader.ReadEndArray();
-                    cborWriter.WriteEndArray();
+                    txWitnessCborWriter.WriteEndArray();
                     break;
             }
         }
 
-        cborReader.ReadEndMap();
-        cborWriter.WriteEndMap();
+        // End of Witness Sets
+        txWitnessCborWriter.WriteEndMap();
 
-        // isValid
-        cborWriter.WriteBoolean(true);
-
-        // Auxiliary Data
-        cborWriter.WriteNull();
-
-        // End of Tx
-        cborWriter.WriteEndArray();
-
-        return cborWriter.Encode();
-    }
-
-    private static void CopyNextElement(CborReader reader, CborWriter writer)
-    {
-        switch (reader.PeekState())
-        {
-            case CborReaderState.StartArray:
-                int? length = reader.ReadStartArray();
-                writer.WriteStartArray(length);
-                while (reader.PeekState() != CborReaderState.EndArray)
-                {
-                    CopyNextElement(reader, writer); // Recursively copy elements within the array
-                }
-                reader.ReadEndArray();
-                writer.WriteEndArray();
-                break;
-
-            case CborReaderState.StartMap:
-                reader.ReadStartMap();
-                writer.WriteStartMap(reader.CurrentDepth);
-                while (reader.PeekState() != CborReaderState.EndMap)
-                {
-                    CopyNextElement(reader, writer); // Recursively copy key-value pairs within the map
-                    CopyNextElement(reader, writer);
-                }
-                reader.ReadEndMap();
-                writer.WriteEndMap();
-                break;
-
-            case CborReaderState.Tag:
-                var tag = reader.ReadTag();
-                writer.WriteTag(tag);
-                CopyNextElement(reader, writer); // Copy the data associated with the tag
-                break;
-
-            // Handle simple types (UnsignedInteger, NegativeInteger, ByteString, TextString, etc.)
-            case CborReaderState.UnsignedInteger:
-                writer.WriteUInt64(reader.ReadUInt64());
-                break;
-
-            case CborReaderState.ByteString:
-                writer.WriteByteString(reader.ReadByteString());
-                break;
-
-            case CborReaderState.TextString:
-                writer.WriteTextString(reader.ReadTextString());
-                break;
-
-            // Add cases for other simple types as needed (NegativeInteger, SimpleValue, etc.)
-
-            default:
-                throw new InvalidOperationException($"Unsupported or unexpected CBOR data type: {reader.PeekState()}");
-        }
+        var txBodyCborBytes = txBodyCborWriter.Encode();
+        var txWitnessCborBytes = txWitnessCborWriter.Encode();
+        return (txBodyCborBytes, txWitnessCborBytes);
     }
 }
