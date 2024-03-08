@@ -4,15 +4,9 @@ using CborSerialization;
 
 namespace Coinecta.Data.Models.Datums;
 
-/*
-121_0([_
-    121_0([_
-        h'cb84310092f8c3dae1ebf0ac456114e487297d3fe684d3236588d5b3',
-    ]),
-])
-*/
+/* 121_0([_ 0, 1, 122_0([])]) */
 [CborSerialize(typeof(StakeKeyMintRedeemerCborConvert))]
-public record StakeKeyMintRedeemer(ulong StakePoolindex, ulong TimeLockIndex) : IDatum;
+public record StakeKeyMintRedeemer(ulong StakePoolindex, ulong TimeLockIndex, bool Mint) : IDatum;
 
 public class StakeKeyMintRedeemerCborConvert : ICborConvertor<StakeKeyMintRedeemer>
 {
@@ -26,8 +20,16 @@ public class StakeKeyMintRedeemerCborConvert : ICborConvertor<StakeKeyMintRedeem
         reader.ReadStartArray();
         var stakePoolIndex = reader.ReadUInt64();
         var timeLockIndex = reader.ReadUInt64();
+        var mintTag = reader.ReadTag();
+        if ((int)mintTag != 121 && (int)mintTag != 122)
+        {
+            throw new Exception("Invalid tag");
+        }
+        var mint = mintTag == (CborTag)122;
+        reader.ReadStartArray();
         reader.ReadEndArray();
-        return new StakeKeyMintRedeemer(stakePoolIndex, timeLockIndex);
+        reader.ReadEndArray();
+        return new StakeKeyMintRedeemer(stakePoolIndex, timeLockIndex, mint);
     }
 
     public void Write(ref CborWriter writer, StakeKeyMintRedeemer value)
@@ -36,6 +38,17 @@ public class StakeKeyMintRedeemerCborConvert : ICborConvertor<StakeKeyMintRedeem
         writer.WriteStartArray(null);
         writer.WriteUInt64(value.StakePoolindex);
         writer.WriteUInt64(value.TimeLockIndex);
+
+        if (value.Mint)
+        {
+            writer.WriteTag((CborTag)122);
+        }
+        else
+        {
+            writer.WriteTag((CborTag)121);
+        }
+        writer.WriteStartArray(0);
+        writer.WriteEndArray();
         writer.WriteEndArray();
     }
 }

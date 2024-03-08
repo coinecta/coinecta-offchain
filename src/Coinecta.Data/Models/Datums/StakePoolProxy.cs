@@ -34,12 +34,14 @@ StakePoolProxy with Destination No Datum
 */
 [CborSerialize(typeof(StakePoolProxyCborConvert<>))]
 public record StakePoolProxy<T>(
-    Signature Owner, 
-    Destination<T> Destination, 
-    ulong LockTime, 
-    Rational RewardMultiplier, 
+    Signature Owner,
+    Destination<T> Destination,
+    ulong LockTime,
+    Rational RewardMultiplier,
     byte[] PolicyId,
-    byte[] AssetName, 
+    byte[] AssetName,
+    ulong AssetAmount,
+    ulong LovelaceAmount,
     byte[] StakeMintingPolicyId
 ) : IDatum;
 
@@ -66,11 +68,13 @@ public class StakePoolProxyCborConvert<T> : ICborConvertor<StakePoolProxy<T>> wh
         var rewardMultiplier = new RationalCborConvert().Read(ref reader); // Assuming RationalCborConvert exists
         var policyId = reader.ReadByteString();
         var assetName = reader.ReadByteString();
+        var assetAmount = reader.ReadUInt64();
+        var lovelaceAmount = reader.ReadUInt64();
         var stakeMintingPolicyId = reader.ReadByteString();
 
         reader.ReadEndArray();
 
-        return new StakePoolProxy<T>(signature, destination, lockTime, rewardMultiplier, policyId, assetName, stakeMintingPolicyId);
+        return new StakePoolProxy<T>(signature, destination, lockTime, rewardMultiplier, policyId, assetName, assetAmount, lovelaceAmount, stakeMintingPolicyId);
     }
 
     public void Write(ref CborWriter writer, StakePoolProxy<T> value)
@@ -90,6 +94,8 @@ public class StakePoolProxyCborConvert<T> : ICborConvertor<StakePoolProxy<T>> wh
         new RationalCborConvert().Write(ref writer, value.RewardMultiplier); // Assuming RationalCborConvert exists
         writer.WriteByteString(value.PolicyId);
         writer.WriteByteString(value.AssetName);
+        writer.WriteUInt64(value.AssetAmount);
+        writer.WriteUInt64(value.LovelaceAmount);
         writer.WriteByteString(value.StakeMintingPolicyId);
 
         writer.WriteEndArray(); // End of StakePoolProxy array
