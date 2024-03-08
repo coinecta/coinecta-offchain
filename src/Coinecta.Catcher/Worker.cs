@@ -98,6 +98,7 @@ public class Worker(
             if (pendingStakeRequests.Count == 0)
             {
                 _logger.LogInformation("No Stake Requests to process.");
+                _logger.LogInformation("Pending Execution Stake Requests: {pendingExecutionStakeRequestCount}", CatcherState.PendingExecutionStakeRequests.Count);
                 await Task.Delay(pollingInterval, stoppingToken);
                 continue;
             }
@@ -108,7 +109,7 @@ public class Worker(
 
             // execute all transactions
             int stakeRequestCount = pendingStakeRequests.Count;
-            _logger.LogInformation("Processing {stakeRequestCount} Stake Requests...", stakeRequestCount);
+            _logger.LogInformation("Processing {stakeRequestCount} Stake Requests.", stakeRequestCount);
             foreach (StakeRequestByAddress stakeRequest in pendingStakeRequests)
             {
                 StakePoolByAddress? stakePool = CatcherState.CurrentStakePoolStates!
@@ -127,7 +128,7 @@ public class Worker(
                     }
                     catch (Exception e)
                     {
-                        _logger.LogError(e, "Error while executing stake request. Skipping...");
+                        _logger.LogError(e, "Error while executing stake request.");
                     }
                 }
             }
@@ -396,7 +397,6 @@ public class Worker(
         };
 
         CatcherState.CurrentStakePoolStates[index] = updatedPool;
-
         _logger.LogInformation("Tx Submitted: {txHash}", txHash);
     }
 }
