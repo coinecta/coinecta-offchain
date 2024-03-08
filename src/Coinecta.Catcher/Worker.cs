@@ -325,10 +325,9 @@ public class Worker(
             SKey = CatcherState.CatcherPrivateKey
         }));
 
-        string txHashDerived = Convert.ToHexString(HashUtility.Blake2b256(tx.TransactionBody.GetCBOR(null).EncodeToBytes())).ToLowerInvariant();
-
         // Submit the transaction
         // When there's an error submitting the transaction, we reset the state
+        string? txHash = string.Empty;
         try
         {
             // Execute the POST request
@@ -337,11 +336,11 @@ public class Worker(
             HttpResponseMessage submitTxResponse = await SubmitApi.PostAsync("api/submit/tx", submitPayload, stoppingToken);
 
             // Read and output the response content
-            string responseContent = await submitTxResponse.Content.ReadAsStringAsync(stoppingToken);
+            txHash = await submitTxResponse.Content.ReadFromJsonAsync<string>(stoppingToken);
 
             if (!submitTxResponse.IsSuccessStatusCode)
             {
-                throw new Exception($"Error while submitting transaction. Status Code: {submitTxResponse.StatusCode}. Response: {responseContent}");
+                throw new Exception($"Error while submitting transaction. Status Code: {submitTxResponse.StatusCode}. Response: {txHash}");
             }
         }
         catch (Exception e)
@@ -367,7 +366,7 @@ public class Worker(
 
         // Update State
         CatcherState.CurrentCertificateUtxoState!.Balance.Lovelaces = tx.TransactionBody.TransactionOutputs[3].Value.Coin;
-        CatcherState.CurrentCertificateUtxoState.TxHash = txHashDerived;
+        CatcherState.CurrentCertificateUtxoState.TxHash = txHash!;
         CatcherState.CurrentCertificateUtxoState.TxIndex = 3;
 
         int index = CatcherState.CurrentStakePoolStates!.IndexOf(stakePool);
@@ -385,7 +384,7 @@ public class Worker(
         {
             Address = oldPool.Address,
             Slot = currentSlot,
-            TxHash = txHashDerived,
+            TxHash = txHash!,
             TxIndex = 0,
             Amount = new()
             {
@@ -398,6 +397,6 @@ public class Worker(
 
         CatcherState.CurrentStakePoolStates[index] = updatedPool;
 
-        _logger.LogInformation("Tx Submitted: {txHashDerived}", txHashDerived);
+        _logger.LogInformation("Tx Submitted: {txHash}", txHash);
     }
 }
