@@ -277,7 +277,11 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
 .WithName("GetStakePositionsByStakeKeys")
 .WithOpenApi();
 
-app.MapPost("/transaction/stake/add", async (TransactionBuildingService txBuildingService, [FromBody] AddStakeRequest request) =>
+app.MapPost("/transaction/stake/add", async (
+    TransactionBuildingService txBuildingService, 
+    ILogger<Program> logger,
+    [FromBody] AddStakeRequest request
+) =>
 {
     try
     {
@@ -286,13 +290,18 @@ app.MapPost("/transaction/stake/add", async (TransactionBuildingService txBuildi
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Error adding stake transaction");
         return Results.BadRequest(ex.Message);
     }
 })
 .WithName("AddStakeTransaction")
 .WithOpenApi();
 
-app.MapPost("/transaction/finalize", (TransactionBuildingService txBuildingService, [FromBody] FinalizeTransactionRequest request) =>
+app.MapPost("/transaction/finalize", (
+    TransactionBuildingService txBuildingService, 
+    ILogger<Program> logger,
+    [FromBody] FinalizeTransactionRequest request
+) =>
 {
     try
     {
@@ -301,13 +310,18 @@ app.MapPost("/transaction/finalize", (TransactionBuildingService txBuildingServi
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Error canceling stake transaction");
         return Results.BadRequest(ex.Message);
     }
 })
 .WithName("FinalizeTransaction")
 .WithOpenApi();
 
-app.MapPost("/transaction/stake/cancel", async (TransactionBuildingService txBuildingService, [FromBody] CancelStakeRequest request) =>
+app.MapPost("/transaction/stake/cancel", async (
+    TransactionBuildingService txBuildingService, 
+    ILogger<Program> logger,
+    [FromBody] CancelStakeRequest request
+) =>
 {
     try
     {
@@ -316,13 +330,18 @@ app.MapPost("/transaction/stake/cancel", async (TransactionBuildingService txBui
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Error canceling stake transaction");
         return Results.BadRequest(ex.Message);
     }
 })
 .WithName("CancelStakeTransaction")
 .WithOpenApi();
 
-app.MapPost("/transaction/stake/claim", async (TransactionBuildingService txBuildingService, [FromBody] ClaimStakeRequest request) =>
+app.MapPost("/transaction/stake/claim", async (
+    TransactionBuildingService txBuildingService,
+    ILogger<Program> logger,
+    [FromBody] ClaimStakeRequest request
+) =>
 {
     try
     {
@@ -331,13 +350,18 @@ app.MapPost("/transaction/stake/claim", async (TransactionBuildingService txBuil
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Error claiming stake transaction");
         return Results.BadRequest(ex.Message);
     }
 })
 .WithName("ClaimStakeTransaction")
 .WithOpenApi();
 
-app.MapPost("/transaction/stake/execute", async (TransactionBuildingService txBuildingService, [FromBody] ExecuteStakeRequest request) =>
+app.MapPost("/transaction/stake/execute", async (
+    TransactionBuildingService txBuildingService,
+    ILogger<Program> logger,
+    [FromBody] ExecuteStakeRequest request
+) =>
 {
     try
     {
@@ -346,6 +370,7 @@ app.MapPost("/transaction/stake/execute", async (TransactionBuildingService txBu
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Error executing stake transaction");
         return Results.BadRequest(ex.Message);
     }
 })
