@@ -103,18 +103,27 @@ public class Worker(
                 continue;
             }
 
-            await UpdateCurrentStakePoolsAsync();
-            await UpdateCurrentCollateralUtxoAsync();
-            await UpdateCurrentCertificateUtxoAsync();
+            try
+            {
+                await UpdateStatesAsync();
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error while updating states.");
+                await Task.Delay(pollingInterval, stoppingToken);
+                continue;
+            }
 
             // execute all transactions
             int stakeRequestCount = pendingStakeRequests.Count;
             _logger.LogInformation("Processing {stakeRequestCount} Stake Requests.", stakeRequestCount);
             foreach (StakeRequestByAddress stakeRequest in pendingStakeRequests)
             {
+
                 StakePoolByAddress? stakePool = CatcherState.CurrentStakePoolStates!
-                    .FirstOrDefault(s => s.StakePool.PolicyId.SequenceEqual(stakeRequest.StakePoolProxy.PolicyId) &&
-                        s.StakePool.Owner.KeyHash.SequenceEqual(Convert.FromHexString(configuration["CoinectaStakePoolOwnerPkh"]!)));
+                    .FirstOrDefault(s =>
+                        Convert.ToHexString(s.StakePool.PolicyId).Equals(Convert.ToHexString(stakeRequest.StakePoolProxy.PolicyId), StringComparison.InvariantCultureIgnoreCase) &&
+                        Convert.ToHexString(s.StakePool.Owner.KeyHash).Equals(configuration["CoinectaStakePoolOwnerPkh"], StringComparison.InvariantCultureIgnoreCase));
 
                 if (stakePool is not null)
                 {
@@ -130,6 +139,10 @@ public class Worker(
                     {
                         _logger.LogError(e, "Error while executing stake request.");
                     }
+                }
+                else
+                {
+                    _logger.LogError("Stake Pool not found for Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
                 }
             }
 
@@ -297,6 +310,13 @@ public class Worker(
         }
 
         return null;
+    }
+
+    private async Task UpdateStatesAsync()
+    {
+        await UpdateCurrentStakePoolsAsync();
+        await UpdateCurrentCollateralUtxoAsync();
+        await UpdateCurrentCertificateUtxoAsync();
     }
 
     private async Task ProcessStakeRequestAsync(
