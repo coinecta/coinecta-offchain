@@ -142,6 +142,8 @@ public class Worker(
                 }
                 else
                 {
+                    CatcherState.CurrentStakePoolStates = null;
+                    await UpdateCurrentStakePoolsAsync();
                     _logger.LogError("Stake Pool not found for Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
                 }
             }
