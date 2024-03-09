@@ -336,6 +336,14 @@ public class Worker(
 
         JsonContent executePayload = JsonContent.Create(request, request.GetType(), null, jsonSerializerOptions);
         HttpResponseMessage executeResponse = await CoinectaApi.PostAsync("transaction/stake/execute", executePayload, stoppingToken);
+
+        if (!executeResponse.IsSuccessStatusCode)
+        {
+            string errorResponseJson = await executeResponse.Content.ReadAsStringAsync(stoppingToken);
+            _logger.LogError("Error while executing stake request. Status Code: {StatusCode}. Response: {Response}", executeResponse.StatusCode, errorResponseJson);
+            return;
+        }
+
         string executeResponseJson = await executeResponse.Content.ReadAsStringAsync(stoppingToken);
         string unsignedTxCbor = JsonSerializer.Deserialize<string>(executeResponseJson)!;
         Transaction tx = Convert.FromHexString(unsignedTxCbor).DeserializeTransaction();
@@ -374,6 +382,11 @@ public class Worker(
             await UpdateCurrentStakePoolsAsync();
             await UpdateCurrentCertificateUtxoAsync();
             await UpdateCurrentCollateralUtxoAsync();
+
+            _logger.LogInformation("State Set.");
+            _logger.LogInformation("Certificate Utxo: {txHash} - {txIndex}", CatcherState.CurrentCertificateUtxoState?.TxHash, CatcherState.CurrentCertificateUtxoState?.TxIndex);
+            _logger.LogInformation("Collateral Utxo: {txHash} - {txIndex}", CatcherState.CurrentCollateralUtxoState?.TxHash, CatcherState.CurrentCollateralUtxoState?.TxIndex);
+            _logger.LogInformation("Stake Pools: {stakePoolCount}", CatcherState.CurrentStakePoolStates?.Count);
             return;
         }
 
