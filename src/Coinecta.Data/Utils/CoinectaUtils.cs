@@ -174,6 +174,11 @@ public static class CoinectaUtils
         return result;
     }
 
+    public static List<Utxo> GetPureAdaUtxos(List<Utxo> utxos)
+    {
+        return utxos.Where(utxo => utxo.Balance.Assets.Count == 0).ToList();
+    }
+
     public static ITokenBundleBuilder GetTokenBundleFromAmount(Dictionary<string, Dictionary<string, ulong>> amount)
     {
         ITokenBundleBuilder multiAssetBuilder = TokenBundleBuilder.Create;
