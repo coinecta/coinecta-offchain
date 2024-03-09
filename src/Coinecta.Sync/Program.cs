@@ -21,6 +21,10 @@ builder.Services.AddCardanoIndexer<CoinectaDbContext>(builder.Configuration, 60)
 
 var app = builder.Build();
 
+using var scope = app.Services.CreateScope();
+var dbContext = scope.ServiceProvider.GetRequiredService<CoinectaDbContext>();
+dbContext.Database.Migrate();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
