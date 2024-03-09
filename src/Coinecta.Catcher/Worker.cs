@@ -193,6 +193,7 @@ public class Worker(
         _logger.LogInformation("Fetching Collateral Utxo...");
         List<UtxoByAddress> result = await FetchUtxosAsync();
         List<Utxo> utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
+        utxos = CoinectaUtils.GetPureAdaUtxos(utxos);
 
         TransactionOutput collateralOutput = new()
         {
@@ -200,9 +201,9 @@ public class Worker(
             Value = new TransactionOutputValue()
             {
                 Coin = 5_000_000,
-                MultiAsset = []
             }
         };
+
         CoinSelection catcherCollateralCoinSelectionResult = CoinectaUtils.GetCoinSelection([collateralOutput], utxos, CatcherState.CatcherAddress.ToString(), limit: 1);
 
         return catcherCollateralCoinSelectionResult.SelectedUtxos.First();
@@ -341,7 +342,6 @@ public class Worker(
         {
             string errorResponseJson = await executeResponse.Content.ReadAsStringAsync(stoppingToken);
             _logger.LogError("Error while executing stake request. Status Code: {StatusCode}. Response: {Response}", executeResponse.StatusCode, errorResponseJson);
-            return;
         }
 
         string executeResponseJson = await executeResponse.Content.ReadAsStringAsync(stoppingToken);
