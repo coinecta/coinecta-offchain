@@ -211,7 +211,8 @@ public static class TransactionExtension
                                     var assetName = cborReader.ReadByteString();
                                     txBodyCborWriter.WriteByteString(assetName);
 
-                                    txBodyCborWriter.WriteEncodedValue(cborReader.ReadEncodedValue().Span);
+                                    var assetValue = cborReader.ReadUInt64();
+                                    txBodyCborWriter.WriteUInt64(assetValue);
                                 }
 
                                 cborReader.ReadEndMap();
@@ -293,7 +294,8 @@ public static class TransactionExtension
                                         var assetName = cborReader.ReadByteString();
                                         txBodyCborWriter.WriteByteString(assetName);
 
-                                        txBodyCborWriter.WriteEncodedValue(cborReader.ReadEncodedValue().Span);
+                                        var assetValue = cborReader.ReadUInt64();
+                                        txBodyCborWriter.WriteUInt64(assetValue);
                                     }
 
                                     cborReader.ReadEndMap();
@@ -348,7 +350,8 @@ public static class TransactionExtension
                             var assetName = cborReader.ReadByteString();
                             txBodyCborWriter.WriteByteString(assetName);
 
-                            txBodyCborWriter.WriteEncodedValue(cborReader.ReadEncodedValue().Span);
+                            var assetValue = cborReader.ReadInt64();
+                            txBodyCborWriter.WriteInt64(assetValue);
                         }
 
                         cborReader.ReadEndMap();
