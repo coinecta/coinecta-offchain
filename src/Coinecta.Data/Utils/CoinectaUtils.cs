@@ -63,7 +63,13 @@ public static class CoinectaUtils
 
     public static NetworkType GetNetworkType(IConfiguration configuration)
     {
-        return configuration.GetValue<NetworkType>("CardanoNetworkMagic");
+        return configuration.GetValue<int>("CardanoNetworkMagic") switch
+        {
+            764824073 => NetworkType.Mainnet,
+            1 => NetworkType.Preprod,
+            2 => NetworkType.Preview,
+            _ => throw new NotImplementedException()
+        };
     }
 
     public static Address ValidatorAddress(PlutusV2Script plutusScript, IConfiguration configuration)
@@ -296,6 +302,14 @@ public static class CoinectaUtils
         NetworkType.Mainnet => SlotUtility.Mainnet,
         NetworkType.Preview => SlotUtility.Preview,
         NetworkType.Preprod => SlotUtility.Preprod,
+        _ => throw new NotImplementedException()
+    };
+
+    public static SlotNetworkConfig SlotUtilityFromNetwork(int networkMagic) => networkMagic switch
+    {
+        764824073 => SlotUtility.Mainnet,
+        1 => SlotUtility.Preprod,
+        2 => SlotUtility.Preview,
         _ => throw new NotImplementedException()
     };
 
