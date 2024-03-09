@@ -9,6 +9,7 @@ using Address = CardanoSharp.Wallet.Models.Addresses.Address;
 using Cardano.Sync.Data.Models.Datums;
 using CardanoSharp.Wallet.Utilities;
 using CardanoSharp.Wallet.Enums;
+using Coinecta.Data.Utils;
 
 namespace Coinecta.Sync.Reducers;
 
@@ -106,7 +107,7 @@ public class StakeRequestByAddressReducer(
                 var addressBech32 = output.Address.ToBech32();
                 if (addressBech32.StartsWith("addr"))
                 {
-                    var address = new Address(output.Address.ToBech32());
+                    var address = new Address(addressBech32);
                     var pkh = Convert.ToHexString(address.GetPublicKeyHash()).ToLowerInvariant();
                     if (pkh == configuration["CoinectaStakeProxyValidatorHash"])
                     {
@@ -122,7 +123,7 @@ public class StakeRequestByAddressReducer(
                                     Address = AddressUtility.GetBaseAddress(
                                         stakeProxyDatum.Destination.Address.Credential.Hash,
                                         stakeProxyDatum.Destination.Address.StakeCredential!.Credential.Hash,
-                                        configuration.GetValue<NetworkType>("CardanoNetworkMagic")).ToString(),
+                                        CoinectaUtils.GetNetworkType(configuration)).ToString(),
                                     Slot = response.Block.Slot,
                                     TxHash = txBody.Id.ToHex(),
                                     TxIndex = output.Index,
