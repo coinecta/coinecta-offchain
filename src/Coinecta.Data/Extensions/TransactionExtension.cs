@@ -211,8 +211,7 @@ public static class TransactionExtension
                                     var assetName = cborReader.ReadByteString();
                                     txBodyCborWriter.WriteByteString(assetName);
 
-                                    var assetValue = cborReader.ReadUInt64();
-                                    txBodyCborWriter.WriteUInt64(assetValue);
+                                    txBodyCborWriter.WriteEncodedValue(cborReader.ReadEncodedValue().Span);
                                 }
 
                                 cborReader.ReadEndMap();
@@ -294,8 +293,7 @@ public static class TransactionExtension
                                         var assetName = cborReader.ReadByteString();
                                         txBodyCborWriter.WriteByteString(assetName);
 
-                                        var assetValue = cborReader.ReadUInt64();
-                                        txBodyCborWriter.WriteUInt64(assetValue);
+                                        txBodyCborWriter.WriteEncodedValue(cborReader.ReadEncodedValue().Span);
                                     }
 
                                     cborReader.ReadEndMap();
