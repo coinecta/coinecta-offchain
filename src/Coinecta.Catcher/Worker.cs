@@ -109,7 +109,7 @@ public class Worker(
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Error while updating states.");
+                _logger.LogInformation("Error while updating states: {e}", e.Message);
                 await Task.Delay(pollingInterval, stoppingToken);
                 continue;
             }
