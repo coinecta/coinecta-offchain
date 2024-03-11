@@ -20,14 +20,13 @@ public class StakePoolByAddressReducer(
     private CoinectaDbContext _dbContext = default!;
     private readonly ILogger<StakePoolByAddressReducer> _logger = logger;
 
-    public Task RollBackwardAsync(NextResponse response)
+    public async Task RollBackwardAsync(NextResponse response)
     {
         _dbContext = dbContextFactory.CreateDbContext();
         ulong rollbackSlot = response.Block.Slot;
         _dbContext.StakePoolByAddresses.RemoveRange(_dbContext.StakePoolByAddresses.Where(s => s.Slot > rollbackSlot));
-        _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
-        return Task.CompletedTask;
     }
 
     public async Task RollForwardAsync(NextResponse response)
