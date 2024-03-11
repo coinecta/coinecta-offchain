@@ -350,8 +350,8 @@ public static class TransactionExtension
                             var assetName = cborReader.ReadByteString();
                             txBodyCborWriter.WriteByteString(assetName);
 
-                            var assetValue = cborReader.ReadUInt64();
-                            txBodyCborWriter.WriteUInt64(assetValue);
+                            var assetValue = cborReader.ReadInt64();
+                            txBodyCborWriter.WriteInt64(assetValue);
                         }
 
                         cborReader.ReadEndMap();

@@ -19,6 +19,7 @@ using Coinecta.Data.Models.Reducers;
 using Coinecta.Data.Utils;
 using Coinecta.Data.Extensions;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
+using Cardano.Sync.Data.Models.Datums;
 
 namespace Coinecta.Catcher;
 
@@ -74,7 +75,6 @@ public class Worker(
 
             if (latestBlock is null)
             {
-                _logger.LogError("Error while fetching latest block.");
                 await Task.Delay(pollingInterval, stoppingToken);
                 continue;
             }
@@ -129,6 +129,22 @@ public class Worker(
                 {
                     try
                     {
+                        string policyId = Convert.ToHexString(stakeRequest.StakePoolProxy.PolicyId).ToLowerInvariant();
+                        string assetName = Convert.ToHexString(stakeRequest.StakePoolProxy.AssetName).ToLowerInvariant();
+                        ulong remainingLiquidity = stakePool.Amount.MultiAsset[policyId][assetName];
+                        ulong stakeAmount = stakeRequest.StakePoolProxy.AssetAmount;
+                        Rational rewardMultiplier = stakeRequest.StakePoolProxy.RewardMultiplier;
+                        Rational rewardTotalRational = new Rational(stakeAmount, 1) * rewardMultiplier;
+                        ulong rewardTotal = rewardTotalRational.Floor();
+
+                        if (remainingLiquidity < rewardTotal)
+                        {
+                            _logger.LogInformation("Stake Pool has insufficient liquidity for Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
+                            CatcherState.CurrentStakePoolStates = null;
+                            await UpdateCurrentStakePoolsAsync();
+                            continue;
+                        }
+
                         await ProcessStakeRequestAsync(
                             stakeRequest,
                             stakePool,
@@ -142,6 +158,8 @@ public class Worker(
                 }
                 else
                 {
+                    CatcherState.CurrentStakePoolStates = null;
+                    await UpdateCurrentStakePoolsAsync();
                     _logger.LogInformation("Stake Pool not found for Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
                 }
             }
@@ -216,7 +234,6 @@ public class Worker(
             HttpResponseMessage response = await CoinectaApi.GetAsync("/stake/requests/pending?page=1&limit=50");
             if (response.IsSuccessStatusCode)
             {
-
                 string jsonString = await response.Content.ReadAsStringAsync();
                 List<StakeRequestByAddress>? stakeRequestsByAddress = JsonSerializer.Deserialize<List<StakeRequestByAddress>>(jsonString, jsonSerializerOptions);
                 return stakeRequestsByAddress ?? [];

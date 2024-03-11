@@ -195,7 +195,7 @@ app.MapPost("/stake/requests/", async (
         .DistinctBy(s => s.Slot)
         .ToDictionary(
             s => s.Slot,
-            s => CoinectaUtils.TimeFromSlot(NetworkType.Preview, (long)s.Slot)
+            s => CoinectaUtils.TimeFromSlot(CoinectaUtils.GetNetworkType(configuration), (long)s.Slot)
         );
 
     return Results.Ok(new { Total = totalCount, Data = pagedData, Extra = new { SlotData = slotData } });
