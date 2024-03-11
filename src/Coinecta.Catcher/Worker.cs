@@ -137,12 +137,12 @@ public class Worker(
                     }
                     catch (Exception e)
                     {
-                        _logger.LogError(e, "Error while executing stake request.");
+                        _logger.LogInformation("Error while processing stake request: {stakeRequest.TxHash}. Error: {e}", stakeRequest.TxHash, e.Message);
                     }
                 }
                 else
                 {
-                    _logger.LogError("Stake Pool not found for Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
+                    _logger.LogInformation("Stake Pool not found for Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
                 }
             }
 
@@ -224,12 +224,12 @@ public class Worker(
             else
             {
                 // Handle error response
-                _logger.LogError("Error while fetching stake requests. Status Code: {StatusCode}", response.StatusCode);
+                _logger.LogInformation("Error while fetching stake requests. Status Code: {StatusCode}", response.StatusCode);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Error while fetching stake requests");
+            _logger.LogInformation("Error while fetching utxos: {e}", e.Message);
         }
         return [];
     }
@@ -251,12 +251,12 @@ public class Worker(
             else
             {
                 // Handle error response
-                _logger.LogError("Error while fetching stake pools. Status Code: {StatusCode}", response.StatusCode);
+                _logger.LogInformation("Error while fetching stake pools. Status Code: {StatusCode}", response.StatusCode);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Error while fetching stake pools");
+            _logger.LogInformation("Error while fetching utxos: {e}", e.Message);
         }
 
         return [];
@@ -277,12 +277,12 @@ public class Worker(
             else
             {
                 // Handle error response
-                _logger.LogError("Error while fetching utxos. Status Code: {StatusCode}", response.StatusCode);
+                _logger.LogInformation("Error while fetching utxos. Status Code: {StatusCode}", response.StatusCode);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Error while fetching utxos");
+            _logger.LogInformation("Error while fetching utxos: {e}", e.Message);
         }
 
         return [];
@@ -302,12 +302,12 @@ public class Worker(
             else
             {
                 // Handle error response
-                _logger.LogError("Error while fetching latest block. Status Code: {StatusCode}", response.StatusCode);
+                _logger.LogInformation("Error while fetching latest block. Status Code: {StatusCode}", response.StatusCode);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Error while fetching latest block");
+            _logger.LogInformation("Error while fetching latest block: {e}", e.Message);
         }
 
         return null;
@@ -340,12 +340,11 @@ public class Worker(
 
         if (!executeResponse.IsSuccessStatusCode)
         {
-            string errorResponseJson = await executeResponse.Content.ReadAsStringAsync(stoppingToken);
-            _logger.LogError("Error while executing stake request. Status Code: {StatusCode}. Response: {Response}", executeResponse.StatusCode, errorResponseJson);
+            string errorResponse = await executeResponse.Content.ReadFromJsonAsync<string>(stoppingToken) ?? "";
+            throw new Exception($"Error while executing stake request. Status Code: {executeResponse.StatusCode}. Response: {errorResponse}");
         }
 
-        string executeResponseJson = await executeResponse.Content.ReadAsStringAsync(stoppingToken);
-        string unsignedTxCbor = JsonSerializer.Deserialize<string>(executeResponseJson)!;
+        string unsignedTxCbor = await executeResponse.Content.ReadFromJsonAsync<string>(stoppingToken) ?? "";
         Transaction tx = Convert.FromHexString(unsignedTxCbor).DeserializeTransaction();
 
         string signedTxCbor = Convert.ToHexString(tx.SignAndSerializeStakeExecuteTx(new()
@@ -374,7 +373,7 @@ public class Worker(
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Error while submitting transaction. Resetting state...");
+            _logger.LogInformation("Error while submitting transaction. Resetting state. Error: {e}", e.Message);
             CatcherState.CurrentStakePoolStates = null;
             CatcherState.CurrentCertificateUtxoState = null;
             CatcherState.CurrentCollateralUtxoState = null;
