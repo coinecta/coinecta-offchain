@@ -334,7 +334,6 @@ app.MapGet("/stake/stats", async (
         })
         .GroupBy(sp => new { sp.Asset.AssetName });
 
-
     List<PoolStats> groupedByInterest = groupedByAsset
         .Select(g =>
         {
