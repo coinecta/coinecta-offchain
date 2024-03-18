@@ -164,7 +164,7 @@ public static class CoinectaUtils
         List<Utxo>? requiredUtxos = null,
         int limit = 20, ulong feeBuffer = 0uL)
     {
-        RandomImproveStrategy coinSelectionStrategy = new();
+        OptimizedRandomImproveStrategy coinSelectionStrategy = new();
         SingleTokenBundleStrategy changeCreationStrategy = new();
         CoinSelectionService coinSelectionService = new(coinSelectionStrategy, changeCreationStrategy);
 
