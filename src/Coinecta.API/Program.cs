@@ -271,7 +271,8 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
             Bonus = bonus,
             Interest = interest,
             sp.TxHash,
-            sp.TxIndex
+            sp.TxIndex,
+            sp.StakeKey
         };
     }).OrderByDescending(sp => sp.UnlockDate).ToList();
 
