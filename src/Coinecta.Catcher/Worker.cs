@@ -135,10 +135,13 @@ public class Worker(
                         ulong stakeAmount = stakeRequest.StakePoolProxy.AssetAmount;
                         Rational rewardMultiplier = stakeRequest.StakePoolProxy.RewardMultiplier;
                         Rational rewardTotalRational = new Rational(stakeAmount, 1) * rewardMultiplier;
-                        ulong rewardTotal = rewardTotalRational.Floor();
+                        ulong rewardTotal = rewardTotalRational.Numerator / rewardTotalRational.Denominator;
+
+                        _logger.LogInformation("Stake Amount: {stakeAmount} Remaining Liquidity: {remainingLiquidity}. Reward Total: {rewardTotal}.", stakeAmount, remainingLiquidity, rewardTotal);
 
                         if (remainingLiquidity < rewardTotal)
                         {
+                            _logger.LogInformation("Stake Amount: {stakeAmount} Remaining Liquidity: {remainingLiquidity}. Reward Total: {rewardTotal}.", stakeAmount, remainingLiquidity, rewardTotal);
                             _logger.LogInformation("Stake Pool has insufficient liquidity for Stake Request: {stakeRequest.TxHash}", stakeRequest.TxHash);
                             CatcherState.CurrentStakePoolStates = null;
                             await UpdateCurrentStakePoolsAsync();
