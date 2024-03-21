@@ -17,6 +17,7 @@ public class CoinectaDbContext
     public DbSet<StakeRequestByAddress> StakeRequestByAddresses { get; set; }
     public DbSet<StakePositionByStakeKey> StakePositionByStakeKeys { get; set; }
     public DbSet<UtxoByAddress> UtxosByAddress { get; set; }
+    public DbSet<NftByAddress> NftsByAddress { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,6 +29,7 @@ public class CoinectaDbContext
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Amount);
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Interest);
         modelBuilder.Entity<UtxoByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex, item.Status });
+        modelBuilder.Entity<NftByAddress>().HasKey(item => new { item.TxHash, item.OutputIndex, item.Slot, item.PolicyId, item.AssetName, item.UtxoStatus });
         base.OnModelCreating(modelBuilder);
     }
 }

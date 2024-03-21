@@ -35,17 +35,12 @@ public class StakePoolByAddressReducer(
 
         foreach (TransactionBody txBody in response.Block.TransactionBodies)
         {
-            await ProcessTransactionBodyAsync(response.Block, txBody);
+            await ProcessInputAync(response.Block, txBody);
+            await ProcessOutputAync(response.Block, txBody);
         }
 
         await _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
-    }
-
-    private async Task ProcessTransactionBodyAsync(Block block, TransactionBody tx)
-    {
-        await ProcessInputAync(block, tx);
-        await ProcessOutputAync(block, tx);
     }
 
     private async Task ProcessInputAync(Block block, TransactionBody tx)
