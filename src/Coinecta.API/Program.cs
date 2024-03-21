@@ -143,10 +143,11 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
         bool isLocked = sp.LockTime > currentTimestamp;
         string? policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
         Dictionary<string, ulong> asset = sp.Amount.MultiAsset[policyId!];
-        string assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
+        string assetName = asset.Keys.FirstOrDefault()!;
+        string subject = policyId + assetName;
         ulong total = asset.Values.FirstOrDefault();
 
-        if (result.PoolStats.TryGetValue(assetNameAscii, out StakeStats? value))
+        if (result.PoolStats.TryGetValue(subject, out StakeStats? value))
         {
             value.TotalStaked += total;
             value.TotalPortfolio += total;
@@ -154,7 +155,7 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
         }
         else
         {
-            result.PoolStats[assetNameAscii] = new StakeStats
+            result.PoolStats[subject] = new StakeStats
             {
                 TotalStaked = total,
                 TotalPortfolio = total,
@@ -256,7 +257,8 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
         double interest = sp.Interest.Numerator / (double)sp.Interest.Denominator;
         string? policyId = sp.Amount.MultiAsset.Keys.FirstOrDefault();
         Dictionary<string, ulong> asset = sp.Amount.MultiAsset[policyId!];
-        string assetNameAscii = Encoding.ASCII.GetString(Convert.FromHexString(asset.Keys.FirstOrDefault()!));
+        string assetName = asset.Keys.FirstOrDefault()!;
+        string subject = policyId + assetName;
         ulong total = asset.Values.FirstOrDefault();
         ulong initial = (ulong)(total / (1 + interest));
         ulong bonus = total - initial;
@@ -264,7 +266,7 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
 
         return new
         {
-            Name = assetNameAscii,
+            Subject = subject,
             Total = total,
             UnlockDate = unlockDate,
             Initial = initial,
@@ -272,7 +274,7 @@ app.MapPost("/stake/positions", async (IDbContextFactory<CoinectaDbContext> dbCo
             Interest = interest,
             sp.TxHash,
             sp.TxIndex,
-            sp.StakeKey
+            sp.StakeKey,
         };
     }).OrderByDescending(sp => sp.UnlockDate).ToList();
 
