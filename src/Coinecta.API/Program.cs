@@ -13,6 +13,9 @@ using Coinecta.Models.Api;
 using CardanoSharp.Wallet.Models;
 using CardanoSharp.Wallet.Utilities;
 using Cardano.Sync.Data.Models.Datums;
+using Cardano.Sync;
+using CardanoSharp.Wallet.Extensions.Models.Transactions;
+using PeterO.Cbor2;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -60,11 +63,10 @@ builder.Services.AddCors(options =>
 WebApplication app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
 
 app.UseHttpsRedirection();
 
@@ -658,6 +660,12 @@ app.MapPost("/transaction/stake/cancel", async (
         return Results.BadRequest(ex.Message);
     }
 })
+
+
+
+
+
+
 .WithName("CancelStakeTransaction")
 .WithOpenApi();
 
@@ -720,6 +728,18 @@ app.MapGet("/transaction/utxos/{address}", async (IDbContextFactory<CoinectaDbCo
     return Results.Ok(result);
 })
 .WithName("GetAddressUtxos")
+.WithOpenApi();
+
+app.MapGet("/transaction/utxos/raw/{address}", async (string address) =>
+{
+    CardanoNodeClient client = new();
+    await client.ConnectAsync(builder.Configuration["CardanoNodeSocketPath"]!, builder.Configuration.GetValue<uint>("CardanoNetworkMagic"));
+    var utxosByAddress = await client.GetUtxosByAddressAsync(address);
+    var result = utxosByAddress.Values.Select(u =>
+        Convert.ToHexString(CBORObject.NewArray().Add(u.Key.Value.GetCBOR()).Add(u.Value.Value.GetCBOR()).EncodeToBytes()).ToLowerInvariant()).ToList();
+    return Results.Ok(result);
+})
+.WithName("GetAddressRawUtxos")
 .WithOpenApi();
 
 app.MapGet("/block/latest", async (IDbContextFactory<CoinectaDbContext> dbContextFactory) =>
