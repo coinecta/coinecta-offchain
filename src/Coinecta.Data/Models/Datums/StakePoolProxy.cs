@@ -1,4 +1,5 @@
 using System.Formats.Cbor;
+using Cardano.Sync.Data.Models;
 using Cardano.Sync.Data.Models.Datums;
 using CborSerialization;
 

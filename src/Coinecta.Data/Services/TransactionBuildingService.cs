@@ -26,6 +26,7 @@ using System.Text;
 using OutputReference = Cardano.Sync.Data.Models.Datums.OutputReference;
 using Coinecta.Data.Models.Api.Request;
 using Microsoft.Extensions.Configuration;
+using Cardano.Sync.Data.Models;
 
 namespace Coinecta.Data.Services;
 public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration)
