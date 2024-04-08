@@ -734,9 +734,10 @@ app.MapGet("/transaction/utxos/raw/{address}", async (string address) =>
 {
     CardanoNodeClient client = new();
     await client.ConnectAsync(builder.Configuration["CardanoNodeSocketPath"]!, builder.Configuration.GetValue<uint>("CardanoNetworkMagic"));
-    var utxosByAddress = await client.GetUtxosByAddressAsync(address);
-    var result = utxosByAddress.Values.Select(u =>
+    Cardano.Sync.Data.Models.Experimental.UtxosByAddress utxosByAddress = await client.GetUtxosByAddressAsync(address);
+    List<string> result = utxosByAddress.Values.Select(u =>
         Convert.ToHexString(CBORObject.NewArray().Add(u.Key.Value.GetCBOR()).Add(u.Value.Value.GetCBOR()).EncodeToBytes()).ToLowerInvariant()).ToList();
+
     return Results.Ok(result);
 })
 .WithName("GetAddressRawUtxos")
