@@ -10,6 +10,7 @@ using Cardano.Sync.Data.Models.Datums;
 using CardanoSharp.Wallet.Utilities;
 using CardanoSharp.Wallet.Enums;
 using Coinecta.Data.Utils;
+using Cardano.Sync.Data.Models;
 
 namespace Coinecta.Sync.Reducers;
 
@@ -110,7 +111,7 @@ public class StakeRequestByAddressReducer(
                     var pkh = Convert.ToHexString(address.GetPublicKeyHash()).ToLowerInvariant();
                     if (pkh == configuration["CoinectaStakeProxyValidatorHash"])
                     {
-                        if (output.Datum is not null && output.Datum.Type == DatumType.InlineDatum)
+                        if (output.Datum is not null && output.Datum.Type == PallasDotnet.Models.DatumType.InlineDatum)
                         {
                             var datum = output.Datum.Data;
                             try

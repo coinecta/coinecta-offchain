@@ -8,6 +8,8 @@ using Coinecta.Data.Models.Reducers;
 using Cardano.Sync.Data.Models.Datums;
 using Cardano.Sync.Reducers;
 using Coinecta.Data.Models.Enums;
+using Cardano.Sync.Data.Models;
+using TransactionOutput = PallasDotnet.Models.TransactionOutput;
 
 namespace Coinecta.Sync.Reducers;
 
@@ -44,7 +46,7 @@ public class StakePositionByStakeKeyReducer(
     }
 
 
-    private async Task ProcessInputAync(Block block, TransactionBody tx)
+    private async Task ProcessInputAync(PallasDotnet.Models.Block block, TransactionBody tx)
     {
         // Collect input id and index as tuples
         foreach (TransactionInput input in tx.Inputs)
@@ -82,7 +84,7 @@ public class StakePositionByStakeKeyReducer(
         }
     }
 
-    private async Task ProcessOutputAync(Block block, TransactionBody tx)
+    private async Task ProcessOutputAync(PallasDotnet.Models.Block block, TransactionBody tx)
     {
         foreach (TransactionOutput output in tx.Outputs)
         {
@@ -93,7 +95,7 @@ public class StakePositionByStakeKeyReducer(
                 string pkh = Convert.ToHexString(address.GetPublicKeyHash()).ToLowerInvariant();
                 if (pkh == configuration["CoinectaTimelockValidatorHash"])
                 {
-                    if (output.Datum is not null && output.Datum.Type == DatumType.InlineDatum)
+                    if (output.Datum is not null && output.Datum.Type == PallasDotnet.Models.DatumType.InlineDatum)
                     {
                         byte[] datum = output.Datum.Data;
                         try
