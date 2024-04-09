@@ -170,7 +170,7 @@ public static class CoinectaUtils
 
         int retry = 0;
 
-        while (retry < 10)
+        while (retry < 100)
         {
             try
             {
