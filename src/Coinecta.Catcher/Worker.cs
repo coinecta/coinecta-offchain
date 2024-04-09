@@ -20,6 +20,9 @@ using Coinecta.Data.Utils;
 using Coinecta.Data.Extensions;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 using Cardano.Sync.Data.Models.Datums;
+using Cardano.Sync;
+using Cardano.Sync.Data.Models.Experimental;
+using PeterO.Cbor2;
 
 namespace Coinecta.Catcher;
 
@@ -186,9 +189,7 @@ public class Worker(
     private async Task<Utxo> GetUpdatedCertificateUtxoAsync()
     {
         _logger.LogInformation("Fetching Certificate Utxo...");
-        List<UtxoByAddress> result = await FetchUtxosAsync();
-
-        List<Utxo> utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
+        List<Utxo>? utxos = await FetchUtxosAsync() ?? throw new Exception("Error while fetching utxos.");
         ITokenBundleBuilder catcherTokenBundle = TokenBundleBuilder.Create;
         catcherTokenBundle.AddToken(Convert.FromHexString(CatcherState.CatcherCertificatePolicyId), Convert.FromHexString(CatcherState.CatcherCertificateAssetName), 1);
 
@@ -212,8 +213,7 @@ public class Worker(
     private async Task<Utxo> GetUpdatedCollateralUtxoAsync()
     {
         _logger.LogInformation("Fetching Collateral Utxo...");
-        List<UtxoByAddress> result = await FetchUtxosAsync();
-        List<Utxo> utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
+        List<Utxo>? utxos = await FetchUtxosAsync() ?? throw new Exception("Error while fetching utxos.");
         utxos = CoinectaUtils.GetPureAdaUtxos(utxos);
 
         TransactionOutput collateralOutput = new()
@@ -282,30 +282,26 @@ public class Worker(
         return [];
     }
 
-    private async Task<List<UtxoByAddress>> FetchUtxosAsync()
+    private async Task<List<Utxo>?> FetchUtxosAsync()
     {
         try
         {
-            HttpResponseMessage response = await CoinectaApi.GetAsync($"/transaction/utxos/{CatcherState.CatcherAddress}");
+            CardanoNodeClient client = new();
+            await client.ConnectAsync(configuration["CardanoNodeSocketPath"]!, configuration.GetValue<uint>("CardanoNetworkMagic"));
 
-            if (response.IsSuccessStatusCode)
-            {
-                string jsonString = await response.Content.ReadAsStringAsync();
-                List<UtxoByAddress>? utxosByAddress = JsonSerializer.Deserialize<List<UtxoByAddress>>(jsonString, jsonSerializerOptions);
-                return utxosByAddress ?? [];
-            }
-            else
-            {
-                // Handle error response
-                _logger.LogInformation("Error while fetching utxos. Status Code: {StatusCode}", response.StatusCode);
-            }
+            UtxosByAddress utxosByAddress = await client.GetUtxosByAddressAsync(CatcherState.CatcherAddress.ToString());
+            List<string> rawUtxosByAddress = utxosByAddress.Values.Select(u =>
+                Convert.ToHexString(CBORObject.NewArray().Add(u.Key.Value.GetCBOR()).Add(u.Value.Value.GetCBOR()).EncodeToBytes()).ToLowerInvariant()).ToList();
+            List<Utxo> utxos = CoinectaUtils.ConvertUtxoListCbor(rawUtxosByAddress).ToList();
+
+            return utxos;
         }
         catch (Exception e)
         {
             _logger.LogInformation("Error while fetching utxos: {e}", e.Message);
         }
 
-        return [];
+        return null;
     }
 
     private async Task<Block?> FetchLatestBlockAsync()
