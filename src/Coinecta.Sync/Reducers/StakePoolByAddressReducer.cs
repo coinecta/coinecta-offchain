@@ -8,6 +8,7 @@ using Cardano.Sync.Reducers;
 using Coinecta.Data.Models.Reducers;
 using Cardano.Sync.Data.Models.Datums;
 using Coinecta.Data.Models.Enums;
+using Cardano.Sync.Data.Models;
 
 namespace Coinecta.Sync.Reducers;
 
@@ -43,7 +44,7 @@ public class StakePoolByAddressReducer(
         _dbContext.Dispose();
     }
 
-    private async Task ProcessInputAync(Block block, TransactionBody tx)
+    private async Task ProcessInputAync(PallasDotnet.Models.Block block, TransactionBody tx)
     {
         foreach (TransactionInput input in tx.Inputs)
         {
@@ -82,7 +83,7 @@ public class StakePoolByAddressReducer(
         }
     }
 
-    private Task ProcessOutputAync(Block block, TransactionBody tx)
+    private Task ProcessOutputAync(PallasDotnet.Models.Block block, TransactionBody tx)
     {
         tx.Outputs.ToList().ForEach(output =>
         {

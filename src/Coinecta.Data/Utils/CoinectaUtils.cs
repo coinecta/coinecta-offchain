@@ -164,14 +164,28 @@ public static class CoinectaUtils
         List<Utxo>? requiredUtxos = null,
         int limit = 20, ulong feeBuffer = 0uL)
     {
-        OptimizedRandomImproveStrategy coinSelectionStrategy = new();
-        SingleTokenBundleStrategy changeCreationStrategy = new();
+        RandomImproveStrategy coinSelectionStrategy = new();
+        MultiSplitChangeSelectionStrategy changeCreationStrategy = new();
         CoinSelectionService coinSelectionService = new(coinSelectionStrategy, changeCreationStrategy);
 
-        CoinSelection result = coinSelectionService
-            .GetCoinSelection(outputs, utxos, changeAddress, mint, requiredUtxos, limit, feeBuffer);
+        int retry = 0;
 
-        return result;
+        while (retry < 100)
+        {
+            try
+            {
+                CoinSelection result = coinSelectionService
+                    .GetCoinSelection(outputs, utxos, changeAddress, mint, requiredUtxos, limit, feeBuffer);
+
+                return result;
+            }
+            catch
+            {
+                retry++;
+            }
+        }
+
+        throw new Exception("Coin selection failed");
     }
 
     public static List<Utxo> GetPureAdaUtxos(List<Utxo> utxos)
