@@ -415,8 +415,8 @@ app.MapGet("/stake/stats", async (
                 g => g.Key,
                 g =>
                 {
-                    return g.GroupBy(sp => sp.Interest).ToDictionary(
-                        g => g.Key.Numerator,
+                    return g.GroupBy(sp => sp.Interest, rationalEqualityComparer).ToDictionary(
+                        g => (decimal)g.Key.Numerator / g.Key.Denominator,
                         g =>
                         {
                             Rational amount = new(g.Aggregate(0UL, (acc, sp) => acc + sp.Asset.Amount), 1);
