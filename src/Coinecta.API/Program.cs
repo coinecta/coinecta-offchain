@@ -499,81 +499,11 @@ app.MapGet("/stake/stats", async (
 .WithName("GetStakePositionsSnapshot")
 .WithOpenApi();
 
-app.MapPost("/stake/snapshot/address", async (
-    IDbContextFactory<CoinectaDbContext> dbContextFactory,
-    IConfiguration configuration, List<string> address,
-    [FromQuery] ulong? slot) =>
-{
-    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
-    string stakeKeyPrefix = configuration["StakeKeyPrefix"]!;
 
-    IQueryable<NftByAddress> nftsByAddressQuery = dbContext.NftsByAddress
-        .AsNoTracking();
-
-    IQueryable<StakePositionByStakeKey> stakePositionByStakeKeysQuery = dbContext.StakePositionByStakeKeys
-        .AsNoTracking();
-
-    if (slot.HasValue)
-    {
-        nftsByAddressQuery = nftsByAddressQuery.Where(n => n.Slot <= slot);
-    }
-
-    var stakePositionsByAddress = await nftsByAddressQuery
-        .GroupBy(n => new { n.TxHash, n.OutputIndex, n.PolicyId, n.AssetName })
-        .Where(g => g.Count() < 2)
-        .Select(g => new
-        {
-            Key = string.Concat(g.First().PolicyId, g.First().AssetName.Substring(stakeKeyPrefix.Length)),
-            g.First().Address
-        })
-        .Join(dbContext.StakePositionByStakeKeys, n => n.Key, s => s.StakeKey, (n, s) => new
-        {
-            n.Address,
-            s.Interest,
-            Amount = s.Amount.MultiAsset.Values.Last().Values.First()
-        })
-        .GroupBy(s => s.Address)
-        .ToListAsync();
-
-    var result = stakePositionsByAddress
-        .Select(sp =>
-        {
-            ulong totalStake = sp.Select(s =>
-            {
-                Rational amount = new(s.Amount, 1);
-                Rational interest = new(s.Interest.Denominator, s.Interest.Numerator + s.Interest.Denominator);
-                Rational originalStake = interest * amount;
-                return originalStake.Numerator / originalStake.Denominator;
-            }).Aggregate(0UL, (acc, stake) => acc + stake);
-
-            return new
-            {
-                Address = sp.Key,
-                UniqueNfts = sp.Count(),
-                TotalStake = totalStake,
-                CummulativeWeight = CoinectaUtils.CalculateTotalWeight(totalStake)
-            };
-        })
-        .ToList();
-
-    var totalStake = result.Select(r => r.TotalStake).Aggregate(0UL, (acc, stake) => acc + stake);
-    var totalCummulativeWeight = result.Select(r => r.CummulativeWeight).Aggregate(0UL, (acc, weight) => acc + (ulong)weight);
-
-    return Results.Ok(new
-    {
-        Data = result.Where(r => address.Contains(r.Address)).ToList(),
-        TotalStakers = result.Count,
-        TotalStake = totalStake,
-        TotalCummulativeWeight = totalCummulativeWeight
-    });
-})
-.WithName("GetStakeSnapshotByAddress")
-.WithOpenApi();
-
-app.MapGet("/stake/snapshot", async (
+app.MapPost("/stake/snapshot", async (
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
     IConfiguration configuration,
-    [FromQuery] ulong? slot) =>
+    ulong? slot, [FromBody] List<string>? addresses, int offset = 0, int limit = 50) =>
 {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
     string stakeKeyPrefix = configuration["StakeKeyPrefix"]!;
@@ -628,12 +558,18 @@ app.MapGet("/stake/snapshot", async (
         .ToList();
 
     var totalStake = result.Select(r => r.TotalStake).Aggregate(0UL, (acc, stake) => acc + stake);
+    var totalStakers = result.Count;
     var totalCummulativeWeight = result.Select(r => r.CummulativeWeight).Aggregate(0UL, (acc, weight) => acc + (ulong)weight);
+
+    if (addresses is not null && addresses.Count > 0)
+    {
+        result = result.Where(r => addresses.Contains(r.Address)).ToList();
+    }
 
     return Results.Ok(new
     {
-        Data = result,
-        TotalStakers = result.Count,
+        Data = result.Skip(offset).Take(limit).ToList(),
+        TotalStakers = totalStakers,
         TotalStake = totalStake,
         TotalCummulativeWeight = totalCummulativeWeight
     });
