@@ -1,10 +1,7 @@
+using Cardano.Sync.Data.Models;
 using Cardano.Sync.Data.Models.Datums;
-using CborSerialization;
+using Coinecta.Data.Models;
 using Coinecta.Data.Models.Datums;
-using Dahomey.Cbor;
-using Dahomey.Cbor.ObjectModel;
-using PeterO.Cbor;
-using PeterO.Cbor2;
 using StakeCredential = Cardano.Sync.Data.Models.Datums.StakeCredential;
 
 namespace Coinecta.Tests;
