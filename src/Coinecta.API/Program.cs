@@ -17,6 +17,7 @@ using Cardano.Sync;
 using CardanoSharp.Wallet.Extensions.Models.Transactions;
 using PeterO.Cbor2;
 using CardanoSharp.Wallet.CIPs.CIP2.Extensions;
+using Coinecta.Data.Models;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -67,6 +68,7 @@ WebApplication app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
+
 
 app.UseHttpsRedirection();
 
@@ -300,6 +302,8 @@ app.MapGet("/stake/stats", async (
         stakePositionsQuery = stakePositionsQuery.Where(s => s.Slot <= slot);
     }
 
+    RationalEqualityComparer rationalEqualityComparer = new();
+
     var stakePositions = await stakePositionsQuery.GroupBy(s => new { s.TxHash, s.TxIndex })
         .Where(g => g.Count() < 2)
         .Select(g => new
@@ -342,18 +346,18 @@ app.MapGet("/stake/stats", async (
     List<PoolStats> groupedByInterest = groupedByAsset
         .Select(g =>
         {
-            var groupedByInterest = g.GroupBy(sp => sp.Interest.Numerator).ToList();
-            Dictionary<ulong, int> nftsByInterest = groupedByInterest.ToDictionary(
-                g => g.Key,
+            var groupedByInterest = g.GroupBy(sp => sp.Interest, rationalEqualityComparer).ToList();
+            Dictionary<decimal, int> nftsByInterest = groupedByInterest.ToDictionary(
+                g => (decimal)g.Key.Numerator / g.Key.Denominator,
                 g => g.Count()
             );
 
-            Dictionary<ulong, ulong> rewardsByInterest = groupedByInterest.ToDictionary(
-                g => g.Key,
+            Dictionary<decimal, ulong> rewardsByInterest = groupedByInterest.ToDictionary(
+                g => (decimal)g.Key.Numerator / g.Key.Denominator,
                 g =>
                 {
                     Rational amount = new(g.Aggregate(0UL, (acc, sp) => acc + sp.Asset.Amount), 1);
-                    Rational interest = new(100, Denominator: g.Key + 100);
+                    Rational interest = new(g.Key.Denominator, Denominator: g.Key.Numerator + g.Key.Denominator);
                     Rational originalStake = interest * amount;
                     ulong originalStakeAmount = originalStake.Numerator / originalStake.Denominator;
                     ulong amountWithStake = amount.Numerator;
@@ -361,13 +365,13 @@ app.MapGet("/stake/stats", async (
                 }
             );
 
-            Dictionary<ulong, StakeData> stakeStatsByInterest = groupedByInterest.ToDictionary(
-                g => g.Key,
+            Dictionary<decimal, StakeData> stakeStatsByInterest = groupedByInterest.ToDictionary(
+                g => (decimal)g.Key.Numerator / g.Key.Denominator,
                 g =>
                 {
                     // Total
                     Rational amount = new(g.Aggregate(0UL, (acc, sp) => acc + sp.Asset.Amount), 1);
-                    Rational interest = new(100, Denominator: g.Key + 100);
+                    Rational interest = new(g.Key.Denominator, Denominator: g.Key.Numerator + g.Key.Denominator);
                     Rational originalStakeTotal = interest * amount;
                     ulong totalAmount = originalStakeTotal.Numerator / originalStakeTotal.Denominator;
 
@@ -430,13 +434,13 @@ app.MapGet("/stake/stats", async (
                 g => g.Key,
                 g =>
                 {
-                    Dictionary<ulong, StakeData> groupedByInterest = g.GroupBy(sp => sp.Interest.Numerator).ToDictionary(
-                        g => g.Key,
+                    Dictionary<decimal, StakeData> groupedByInterest = g.GroupBy(sp => sp.Interest, rationalEqualityComparer).ToDictionary(
+                        g => (decimal)g.Key.Numerator / g.Key.Denominator,
                         g =>
                         {
                             // Total
                             Rational amount = new(g.Aggregate(0UL, (acc, sp) => acc + sp.Asset.Amount), 1);
-                            Rational interest = new(100, Denominator: g.Key + 100);
+                            Rational interest = new(g.Key.Denominator, Denominator: g.Key.Numerator + g.Key.Denominator);
                             Rational originalStakeTotal = interest * amount;
                             ulong totalAmount = originalStakeTotal.Numerator / originalStakeTotal.Denominator;
 
@@ -495,16 +499,16 @@ app.MapGet("/stake/stats", async (
 .WithName("GetStakePositionsSnapshot")
 .WithOpenApi();
 
-app.MapGet("/stake/snapshot/address/{address}", async (
+app.MapPost("/stake/snapshot/address", async (
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
-    IConfiguration configuration, string address,
+    IConfiguration configuration, List<string> address,
     [FromQuery] ulong? slot) =>
 {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+    string stakeKeyPrefix = configuration["StakeKeyPrefix"]!;
 
     IQueryable<NftByAddress> nftsByAddressQuery = dbContext.NftsByAddress
-        .AsNoTracking()
-        .Where(n => n.Address == address);
+        .AsNoTracking();
 
     IQueryable<StakePositionByStakeKey> stakePositionByStakeKeysQuery = dbContext.StakePositionByStakeKeys
         .AsNoTracking();
@@ -514,29 +518,54 @@ app.MapGet("/stake/snapshot/address/{address}", async (
         nftsByAddressQuery = nftsByAddressQuery.Where(n => n.Slot <= slot);
     }
 
-    string stakeKeyPrefix = configuration["StakeKeyPrefix"]!;
     var stakePositionsByAddress = await nftsByAddressQuery
         .GroupBy(n => new { n.TxHash, n.OutputIndex, n.PolicyId, n.AssetName })
         .Where(g => g.Count() < 2)
-        .Select(g => string.Concat(g.First().PolicyId, g.First().AssetName.Substring(stakeKeyPrefix.Length)))
-        .Join(dbContext.StakePositionByStakeKeys, n => n, s => s.StakeKey, (n, s) => new
+        .Select(g => new
         {
-            Amount = s.Amount.MultiAsset.Values.Last().Values.First(),
-            s.Interest
+            Key = string.Concat(g.First().PolicyId, g.First().AssetName.Substring(stakeKeyPrefix.Length)),
+            g.First().Address
         })
+        .Join(dbContext.StakePositionByStakeKeys, n => n.Key, s => s.StakeKey, (n, s) => new
+        {
+            n.Address,
+            s.Interest,
+            Amount = s.Amount.MultiAsset.Values.Last().Values.First()
+        })
+        .GroupBy(s => s.Address)
         .ToListAsync();
 
-    List<ulong> result = stakePositionsByAddress
+    var result = stakePositionsByAddress
         .Select(sp =>
         {
-            Rational amount = new(sp.Amount, 1);
-            Rational interest = new(sp.Interest.Denominator, sp.Interest.Numerator + sp.Interest.Denominator);
-            Rational originalStake = interest * amount;
-            return originalStake.Numerator / originalStake.Denominator;
+            ulong totalStake = sp.Select(s =>
+            {
+                Rational amount = new(s.Amount, 1);
+                Rational interest = new(s.Interest.Denominator, s.Interest.Numerator + s.Interest.Denominator);
+                Rational originalStake = interest * amount;
+                return originalStake.Numerator / originalStake.Denominator;
+            }).Aggregate(0UL, (acc, stake) => acc + stake);
+
+            return new
+            {
+                Address = sp.Key,
+                UniqueNfts = sp.Count(),
+                TotalStake = totalStake,
+                CummulativeWeight = CoinectaUtils.CalculateTotalWeight(totalStake)
+            };
         })
         .ToList();
 
-    return Results.Ok(new { UniqueNfts = result.Count, TotalStake = result.Aggregate(0UL, (acc, stake) => acc + stake) });
+    var totalStake = result.Select(r => r.TotalStake).Aggregate(0UL, (acc, stake) => acc + stake);
+    var totalCummulativeWeight = result.Select(r => r.CummulativeWeight).Aggregate(0UL, (acc, weight) => acc + (ulong)weight);
+
+    return Results.Ok(new
+    {
+        Data = result.Where(r => address.Contains(r.Address)).ToList(),
+        TotalStakers = result.Count,
+        TotalStake = totalStake,
+        TotalCummulativeWeight = totalCummulativeWeight
+    });
 })
 .WithName("GetStakeSnapshotByAddress")
 .WithOpenApi();
