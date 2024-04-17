@@ -833,7 +833,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         return unsignedTxCbor;
     }
 
-    public string FinalizeTx(FinalizeTransactionRequest request)
+    public static string FinalizeTx(FinalizeTransactionRequest request)
     {
         Transaction tx = Convert.FromHexString(request.UnsignedTxCbor).DeserializeTransaction();
 
