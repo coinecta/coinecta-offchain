@@ -68,7 +68,6 @@ WebApplication app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-
 app.UseHttpsRedirection();
 
 app.MapGet("/stake/pool/{address}/{ownerPkh}/{policyId}/{assetName}", async (
@@ -343,18 +342,18 @@ app.MapGet("/stake/stats", async (
     List<PoolStats> groupedByInterest = groupedByAsset
         .Select(g =>
         {
-            var groupedByInterest = g.GroupBy(sp => sp.Interest).ToList();
+            var groupedByInterest = g.GroupBy(sp => sp.Interest.Numerator).ToList();
             Dictionary<ulong, int> nftsByInterest = groupedByInterest.ToDictionary(
-                g => g.Key.Numerator,
+                g => g.Key,
                 g => g.Count()
             );
 
             Dictionary<ulong, ulong> rewardsByInterest = groupedByInterest.ToDictionary(
-                g => g.Key.Numerator,
+                g => g.Key,
                 g =>
                 {
                     Rational amount = new(g.Aggregate(0UL, (acc, sp) => acc + sp.Asset.Amount), 1);
-                    Rational interest = new(g.Key.Denominator, Denominator: g.Key.Numerator + g.Key.Denominator);
+                    Rational interest = new(100, Denominator: g.Key + 100);
                     Rational originalStake = interest * amount;
                     ulong originalStakeAmount = originalStake.Numerator / originalStake.Denominator;
                     ulong amountWithStake = amount.Numerator;
@@ -363,12 +362,12 @@ app.MapGet("/stake/stats", async (
             );
 
             Dictionary<ulong, StakeData> stakeStatsByInterest = groupedByInterest.ToDictionary(
-                g => g.Key.Numerator,
+                g => g.Key,
                 g =>
                 {
                     // Total
                     Rational amount = new(g.Aggregate(0UL, (acc, sp) => acc + sp.Asset.Amount), 1);
-                    Rational interest = new(g.Key.Denominator, Denominator: g.Key.Numerator + g.Key.Denominator);
+                    Rational interest = new(100, Denominator: g.Key + 100);
                     Rational originalStakeTotal = interest * amount;
                     ulong totalAmount = originalStakeTotal.Numerator / originalStakeTotal.Denominator;
 
@@ -431,13 +430,13 @@ app.MapGet("/stake/stats", async (
                 g => g.Key,
                 g =>
                 {
-                    Dictionary<ulong, StakeData> groupedByInterest = g.GroupBy(sp => sp.Interest).ToDictionary(
-                        g => g.Key.Numerator,
+                    Dictionary<ulong, StakeData> groupedByInterest = g.GroupBy(sp => sp.Interest.Numerator).ToDictionary(
+                        g => g.Key,
                         g =>
                         {
                             // Total
                             Rational amount = new(g.Aggregate(0UL, (acc, sp) => acc + sp.Asset.Amount), 1);
-                            Rational interest = new(g.Key.Denominator, Denominator: g.Key.Numerator + g.Key.Denominator);
+                            Rational interest = new(100, Denominator: g.Key + 100);
                             Rational originalStakeTotal = interest * amount;
                             ulong totalAmount = originalStakeTotal.Numerator / originalStakeTotal.Denominator;
 
@@ -593,13 +592,22 @@ app.MapGet("/stake/snapshot", async (
             {
                 Address = sp.Key,
                 UniqueNfts = sp.Count(),
-                TotalStake = totalStake
+                TotalStake = totalStake,
+                CummulativeWeight = CoinectaUtils.CalculateTotalWeight(totalStake)
             };
         })
         .ToList();
 
+    var totalStake = result.Select(r => r.TotalStake).Aggregate(0UL, (acc, stake) => acc + stake);
+    var totalCummulativeWeight = result.Select(r => r.CummulativeWeight).Aggregate(0UL, (acc, weight) => acc + (ulong)weight);
 
-    return Results.Ok(result);
+    return Results.Ok(new
+    {
+        Data = result,
+        TotalStakers = result.Count,
+        TotalStake = totalStake,
+        TotalCummulativeWeight = totalCummulativeWeight
+    });
 })
 .WithName("GetAllStakeSnapshotByAddress")
 .WithOpenApi();
@@ -632,7 +640,7 @@ app.MapPost("/transaction/finalize", (
 {
     try
     {
-        string result = txBuildingService.FinalizeTx(request);
+        string result = TransactionBuildingService.FinalizeTx(request);
         return Results.Ok(result);
     }
     catch (Exception ex)
