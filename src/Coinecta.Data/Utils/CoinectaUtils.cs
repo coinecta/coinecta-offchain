@@ -23,6 +23,35 @@ namespace Coinecta.Data.Utils;
 
 public static class CoinectaUtils
 {
+
+    private readonly static List<StakeTier> _stakeTiers =
+    [
+
+        new StakeTier { Threshold = 160000, Weight = 8000 },
+        new StakeTier { Threshold = 80000, Weight = 3125 },
+        new StakeTier { Threshold = 40000, Weight = 1250 },
+        new StakeTier { Threshold = 20000, Weight = 500 },
+        new StakeTier { Threshold = 10000, Weight = 200 },
+        new StakeTier { Threshold = 5000, Weight = 80 }
+    ];
+
+    public static int CalculateTotalWeight(ulong totalStake)
+    {
+        double adjustedStake = totalStake / Math.Pow(10, 4);
+        int cummulativeWeight = 0;
+
+        _stakeTiers.ForEach(tier =>
+        {
+            while (adjustedStake >= tier.Threshold)
+            {
+                cummulativeWeight += tier.Weight;
+                adjustedStake -= tier.Threshold;
+            }
+        });
+
+        return cummulativeWeight;
+    }
+
     public static IEnumerable<Utxo> ConvertUtxoListCbor(IEnumerable<string> utxoCbors)
     {
         return utxoCbors.Select(utxoCbor =>
