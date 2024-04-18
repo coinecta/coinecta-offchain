@@ -514,12 +514,18 @@ app.MapPost("/stake/snapshot", async (
     IQueryable<StakePositionByStakeKey> stakePositionByStakeKeysQuery = dbContext.StakePositionByStakeKeys
         .AsNoTracking();
 
+    var querySlot = 0UL;
     if (slot.HasValue)
     {
-        nftsByAddressQuery = nftsByAddressQuery.Where(n => n.Slot <= slot);
+        querySlot = slot.Value;
+    }
+    else
+    {
+        querySlot = await dbContext.Blocks.OrderByDescending(b => b.Slot).Select(b => b.Slot).FirstOrDefaultAsync();
     }
 
     var stakePositionsByAddress = await nftsByAddressQuery
+        .Where(n => n.Slot <= querySlot)
         .GroupBy(n => new { n.TxHash, n.OutputIndex, n.PolicyId, n.AssetName })
         .Where(g => g.Count() < 2)
         .Select(g => new
@@ -539,13 +545,7 @@ app.MapPost("/stake/snapshot", async (
     var result = stakePositionsByAddress
         .Select(sp =>
         {
-            ulong totalStake = sp.Select(s =>
-            {
-                Rational amount = new(s.Amount, 1);
-                Rational interest = new(s.Interest.Denominator, s.Interest.Numerator + s.Interest.Denominator);
-                Rational originalStake = interest * amount;
-                return originalStake.Numerator / originalStake.Denominator;
-            }).Aggregate(0UL, (acc, stake) => acc + stake);
+            ulong totalStake = sp.Select(s => s.Amount).Aggregate(0UL, (acc, stake) => acc + stake);
 
             return new
             {
