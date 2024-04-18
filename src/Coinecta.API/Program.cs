@@ -503,7 +503,7 @@ app.MapGet("/stake/stats", async (
 app.MapPost("/stake/snapshot", async (
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
     IConfiguration configuration,
-    ulong? slot, [FromBody] List<string>? addresses, int offset = 0, int limit = 50) =>
+    ulong? slot, [FromBody] List<string>? addresses, int? offset, int? limit) =>
 {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
     string stakeKeyPrefix = configuration["StakeKeyPrefix"]!;
@@ -566,9 +566,14 @@ app.MapPost("/stake/snapshot", async (
         result = result.Where(r => addresses.Contains(r.Address)).ToList();
     }
 
+    if (offset.HasValue && limit.HasValue)
+    {
+        result = result.Skip(offset.Value).Take(limit.Value).ToList();
+    }
+
     return Results.Ok(new
     {
-        Data = result.Skip(offset).Take(limit).ToList(),
+        Data = result,
         TotalStakers = totalStakers,
         TotalStake = totalStake,
         TotalCummulativeWeight = totalCummulativeWeight
