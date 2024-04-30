@@ -1,6 +1,6 @@
 namespace Coinecta.Data.Models.Api;
 
-public record LockedAsset
+public record Asset
 {
     public string PolicyId { get; init; } = default!;
     public string AssetName { get; init; } = default!;

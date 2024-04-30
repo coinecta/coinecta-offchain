@@ -18,6 +18,8 @@ using CardanoSharp.Wallet.Extensions.Models.Transactions;
 using PeterO.Cbor2;
 using CardanoSharp.Wallet.CIPs.CIP2.Extensions;
 using Coinecta.Data.Models;
+using Asset = Coinecta.Data.Models.Api.Asset;
+using Coinecta.Data.Models.Enums;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -177,7 +179,7 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
 .WithName("GetStakeSummaryByStakeKeys")
 .WithOpenApi();
 
-app.MapPost("/stake/requests/", async (
+app.MapPost("/stake/requests", async (
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
     IConfiguration configuration,
     [FromBody] List<string> addresses,
@@ -209,6 +211,76 @@ app.MapPost("/stake/requests/", async (
     return Results.Ok(new { Total = totalCount, Data = pagedData, Extra = new { SlotData = slotData } });
 })
 .WithName("GetStakeRequestsByAddresses")
+.WithOpenApi();
+
+
+app.MapPost("/transaction/history", async (
+    [FromQuery] int? limit,
+    IDbContextFactory<CoinectaDbContext> dbContextFactory,
+    IConfiguration configuration,
+    [FromBody] List<string> addresses,
+    [FromQuery] int offset = 0
+) =>
+{
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
+    IQueryable<TransactionHistory> filteredStakeRequestsQuery = dbContext.StakeRequestByAddresses
+        .AsNoTracking()
+        .Where(srba => addresses.Contains(srba.Address))
+        .GroupBy(srba => new { srba.TxHash, srba.TxIndex })
+        .Select(srba => new TransactionHistory
+        {
+            Address = srba.First().Address,
+            Type = srba.OrderByDescending(srba => srba.Slot).First().Status == StakeRequestStatus.Pending ? TransactionType.StakeRequestPending :
+                srba.OrderByDescending(srba => srba.Slot).First().Status == StakeRequestStatus.Confirmed ? TransactionType.StakeRequestExecuted :
+                TransactionType.StakeRequestPending,
+            Amount = new()
+            {
+                PolicyId = srba.First().Amount.MultiAsset.Keys.First(),
+                AssetName = srba.First().Amount.MultiAsset.Values.First().Keys.First(),
+                Amount = srba.First().Amount.MultiAsset.Values.First().Values.First()
+            },
+            Slot = srba.OrderByDescending(srba => srba.Slot).First().Slot,
+            TxHash = srba.OrderByDescending(srba => srba.Slot).First().TxHash
+        });
+
+    IQueryable<TransactionHistory> filteredStakePositionsQuery = dbContext.NftsByAddress
+        .AsNoTracking()
+        .GroupBy(n => new { n.PolicyId, n.AssetName })
+        .Select(n => new
+        {
+            n.OrderByDescending(n => n.Slot).First().Address,
+            StakeKey = n.Key.PolicyId + n.Key.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length),
+            Status = n.OrderByDescending(n => n.Slot).First().UtxoStatus,
+        })
+        .Join(dbContext.StakePositionByStakeKeys, n => n.StakeKey, s => s.StakeKey, (n, s) => new TransactionHistory
+        {
+            Address = n.Address,
+            Type = s.UtxoStatus == UtxoStatus.Spent ? TransactionType.StakePositionClaimed : TransactionType.StakePositionCreated,
+            Amount = new()
+            {
+                PolicyId = s.Amount.MultiAsset.Keys.Last(),
+                AssetName = s.Amount.MultiAsset.Values.Last().Keys.First(),
+                Amount = s.Amount.MultiAsset.Values.Last().Values.First()
+            },
+            Slot = s.Slot,
+            TxHash = s.TxHash
+        })
+        .Where(n => addresses.Contains(n.Address));
+
+    var filteredStakeRequests = await filteredStakeRequestsQuery.ToListAsync();
+    var filteredStakePositions = await filteredStakePositionsQuery.ToListAsync();
+    var total = filteredStakeRequests.Count + filteredStakePositions.Count;
+    var transactionHistory = filteredStakeRequests
+        .Concat(filteredStakePositions)
+        .OrderByDescending(th => th.Slot)
+        .Skip(offset)
+        .Take(limit ?? 10)
+        .ToList();
+
+    return Results.Ok(new { Total = total, Data = transactionHistory });
+})
+.WithName("GetTransactionHistoryByAddresses")
 .WithOpenApi();
 
 app.MapGet("/stake/requests/pending", async (
@@ -326,7 +398,7 @@ app.MapGet("/stake/stats", async (
         .Select(sp =>
         {
             string[] lockedAssets = sp.LockedAsset!.Trim('[', ']').Trim('(', ')').Split(',');
-            LockedAsset asset = new()
+            Asset asset = new()
             {
                 PolicyId = lockedAssets[0],
                 AssetName = Encoding.UTF8.GetString(Convert.FromHexString(lockedAssets[1].Trim())),
