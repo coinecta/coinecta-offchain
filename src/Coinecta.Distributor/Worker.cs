@@ -1,27 +1,12 @@
-using System.Net.Http.Json;
-using System.Text.Json;
-using Cardano.Sync.Data.Models;
 using CardanoSharp.Wallet;
-using CardanoSharp.Wallet.CIPs.CIP2.Models;
 using CardanoSharp.Wallet.Enums;
-using CardanoSharp.Wallet.Extensions;
 using CardanoSharp.Wallet.Extensions.Models;
-using CardanoSharp.Wallet.Extensions.Models.Transactions;
 using CardanoSharp.Wallet.Models;
 using CardanoSharp.Wallet.Models.Derivations;
 using CardanoSharp.Wallet.Models.Keys;
-using CardanoSharp.Wallet.Models.Transactions;
-using CardanoSharp.Wallet.TransactionBuilding;
 using CardanoSharp.Wallet.Utilities;
-using Coinecta.Data.Models.Api.Request;
-using Coinecta.Data.Models.Reducers;
 using Coinecta.Data.Utils;
-using Coinecta.Data.Extensions;
-using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
-using Cardano.Sync.Data.Models.Datums;
 using Cardano.Sync;
-using Cardano.Sync.Data.Models.Experimental;
-using PeterO.Cbor2;
 using System.Diagnostics;
 
 namespace Coinecta.Distributor;
@@ -36,6 +21,11 @@ public class Worker(
     private List<Utxo> Utxos { get; set; } = [];
     private string Address { get; set; } = "";
     private readonly int _maxTxSize = 16384;
+
+    private readonly string _distributionFile = "distribution.csv";
+    private readonly string _processingFile = "processing.csv";
+    private readonly string _processedFile = "processed";
+    private readonly string _unprocessedFile = "unprocessed";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -62,7 +52,8 @@ public class Worker(
             .Derive(0);
 
         // Set Catcher States
-        CardanoSharp.Wallet.Models.Addresses.Address addr = AddressUtility.GetBaseAddress(paymentNode.PublicKey, stakeNode.PublicKey, CoinectaUtils.GetNetworkType(configuration));
+        CardanoSharp.Wallet.Models.Addresses.Address addr = AddressUtility
+            .GetBaseAddress(paymentNode.PublicKey, stakeNode.PublicKey, CoinectaUtils.GetNetworkType(configuration));
         PublicKey pubKey = paymentNode.PublicKey;
         PrivateKey privKey = paymentNode.PrivateKey;
         string submitUrl = configuration["CardanoSubmitApiUrl"]!;
@@ -71,34 +62,44 @@ public class Worker(
         await UpdateUtxosAsync();
 
         // Check if there are pending distribution file
-        bool distributionFileExists = File.Exists("distribution.csv");
-        bool processedFileExist = File.Exists("processed.csv");
-
+        bool distributionFileExists = File.Exists(_distributionFile);
+        bool processingFileExists = File.Exists(_processingFile);
+        string? unprocessedHeader = null;
+        string? processedHeader = null;
         // If distribution file exists, rename it to processed.csv
         // Add a column in the first column of the processed.csv file 
         // for the transaction hash using File class
         if (distributionFileExists)
         {
             _logger.LogInformation("Distribution file found.");
-            if (processedFileExist)
+            if (processingFileExists)
             {
-                File.Delete("processed.csv");
+                File.Delete(_processingFile);
             }
 
-            _logger.LogInformation("Renaming distribution.csv to processed.csv");
-            File.Move("distribution.csv", "processed.csv");
+            _logger.LogInformation($"Renaming distribution.csv to {_processingFile}");
+            File.Move(_distributionFile, _processingFile);
 
             // Add empty transaction hash to the processed.csv file for each line
-            string[] processedLines = File.ReadAllLines("processed.csv");
-            string processedHeader = processedLines[0];
-            List<string> processedBody = processedLines.Skip(1).Select(l => l + ",").ToList();
+            string[] processingEntries = File.ReadAllLines(_processingFile);
+            unprocessedHeader = processingEntries[0];
+            List<string> processingBody = processingEntries.Skip(1).Select(l => l + ",").ToList();
 
-            await File.WriteAllTextAsync("processed.csv", processedHeader + ",transaction_hash" + Environment.NewLine, stoppingToken);
-            await File.AppendAllLinesAsync("processed.csv", processedBody, stoppingToken);
+            processedHeader = unprocessedHeader + ",transaction_hash";
+
+            await File.WriteAllTextAsync(_processingFile, processedHeader + Environment.NewLine, stoppingToken);
+            await File.AppendAllLinesAsync(_processingFile, processingBody, stoppingToken);
+
         }
 
-        string[] headers = File.ReadAllLines("processed.csv").First().Split(',');
-        List<(int i, string e)> entriesToProcess = File.ReadAllLines("processed.csv").Skip(1).ToList().Where(l => l.Split(',').Last() == "").Select((e, i) => (i + 1, e)).ToList();
+        string[] headers = File.ReadAllLines(_processingFile)
+            .First()
+            .Split(',');
+        List<(int i, string e)> entriesToProcess = File.ReadAllLines(_processingFile)
+            .Skip(1)
+            .Where(l => l.Split(',').Last() == "")
+            .Select((e, i) => (i + 1, e))
+            .ToList();
         Stack<(int, string)> distributionQueue = new(entriesToProcess);
 
         List<OutputData> currentOutputData = [];
@@ -175,6 +176,7 @@ public class Worker(
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to process transaction");
+                    break;
                 }
 
             }
@@ -196,6 +198,7 @@ public class Worker(
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to process transaction");
+                    break;
                 }
 
                 // Clear the current output data
@@ -204,13 +207,47 @@ public class Worker(
             }
         }
 
-        // Rename the processed.csv file to processed-{DateTime.Now}.csv
-        File.Move("processed.csv", $"processed-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.csv");
+        // Separate processed and unprocessed entries
+        var processedEntries = File.ReadAllLines(_processingFile)
+            .Skip(1)
+            .Where(l => !string.IsNullOrEmpty(l.Split(',').Last()))
+            .ToList();
+
+        // Remove the last column (transaction hash) from the unprocessed entries
+        var unprocessedEntries = File.ReadAllLines(_processingFile)
+            .Skip(1)
+            .Where(l => string.IsNullOrEmpty(l.Split(',').Last()))
+            .Select(l => string.Join(',', l.Split(',').Take(l.Split(',').Length - 1)))
+            .ToList();
+
+        // Get the processing.csv header and attach processedEntries to the body
+        var dateTime = $"{DateTime.Now:yyyy-MM-dd-HH-mm-ss}";
+
+        // Write header + processedEntries to a new file
+        if (processedEntries.Count > 0)
+        {
+            var processedFileWithDate = $"{_processedFile}-{dateTime}.csv";
+            File.WriteAllLines(processedFileWithDate, [processedHeader!]);
+            File.AppendAllLines(processedFileWithDate, processedEntries);
+        }
+
+        // Write unprocessedEntries to a new file
+        if (unprocessedEntries.Count > 0)
+        {
+            var unprocessedFileWithDate = $"{_unprocessedFile}-{dateTime}.csv";
+            File.WriteAllLines(unprocessedFileWithDate, [unprocessedHeader!]);
+            File.AppendAllLines(unprocessedFileWithDate, unprocessedEntries);
+        }
+
+        // Delete the processing.csv file
+        File.Delete(_processingFile);
 
         sw.Stop();
 
         _logger.LogInformation("Finished processing all entries in the distribution file.");
         _logger.LogInformation("Processing took {ElapsedMilliseconds}ms", sw.ElapsedMilliseconds);
+
+        Environment.Exit(0);
     }
 
     private async Task UpdateProcessFileAsync(List<int> indices, string txHash)
@@ -219,11 +256,11 @@ public class Worker(
         foreach (int i in indices)
         {
             // Add tx hash to the row in the processed.csv file
-            string[] processedLines = File.ReadAllLines("processed.csv");
+            string[] processedLines = File.ReadAllLines(_processingFile);
             string[] processedRow = processedLines[i].Split(',');
             processedRow[^1] = txHash;
             processedLines[i] = string.Join(',', processedRow);
-            await File.WriteAllLinesAsync("processed.csv", processedLines);
+            await File.WriteAllLinesAsync(_processingFile, processedLines);
         }
     }
 
