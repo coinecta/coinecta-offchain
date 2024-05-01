@@ -220,7 +220,6 @@ public class Worker(
             .Select(l => string.Join(',', l.Split(',').Take(l.Split(',').Length - 1)))
             .ToList();
 
-        // Get the processing.csv header and attach processedEntries to the body
         var dateTime = $"{DateTime.Now:yyyy-MM-dd-HH-mm-ss}";
 
         // Write header + processedEntries to a new file
