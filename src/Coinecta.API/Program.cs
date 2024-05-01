@@ -20,6 +20,7 @@ using CardanoSharp.Wallet.CIPs.CIP2.Extensions;
 using Coinecta.Data.Models;
 using Asset = Coinecta.Data.Models.Api.Asset;
 using Coinecta.Data.Models.Enums;
+using System.Linq;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -224,7 +225,7 @@ app.MapPost("/transaction/history", async (
 {
     using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
 
-    IQueryable<TransactionHistory> filteredStakeRequestsQuery = dbContext.StakeRequestByAddresses
+    var stakeRequestQuery = dbContext.StakeRequestByAddresses
         .AsNoTracking()
         .Where(srba => addresses.Contains(srba.Address))
         .GroupBy(srba => new { srba.TxHash, srba.TxIndex })
@@ -234,48 +235,141 @@ app.MapPost("/transaction/history", async (
             Type = srba.OrderByDescending(srba => srba.Slot).First().Status == StakeRequestStatus.Pending ? TransactionType.StakeRequestPending :
                 srba.OrderByDescending(srba => srba.Slot).First().Status == StakeRequestStatus.Confirmed ? TransactionType.StakeRequestExecuted :
                 TransactionType.StakeRequestPending,
-            Amount = new()
+            Amount = new Asset()
             {
                 PolicyId = srba.First().Amount.MultiAsset.Keys.First(),
                 AssetName = srba.First().Amount.MultiAsset.Values.First().Keys.First(),
                 Amount = srba.First().Amount.MultiAsset.Values.First().Values.First()
             },
             Slot = srba.OrderByDescending(srba => srba.Slot).First().Slot,
-            TxHash = srba.OrderByDescending(srba => srba.Slot).First().TxHash
+            TxHash = srba.OrderByDescending(srba => srba.Slot).First().TxHash,
+            LockDuration = srba.First().StakePoolProxy.LockTime,
         });
 
-    IQueryable<TransactionHistory> filteredStakePositionsQuery = dbContext.NftsByAddress
+    var stakePositionReceivedQuery = dbContext.NftsByAddress
         .AsNoTracking()
-        .GroupBy(n => new { n.PolicyId, n.AssetName })
-        .Select(n => new
+        .Where(nft => nft.UtxoStatus == UtxoStatus.Unspent)
+        .Where(nft => addresses.Contains(nft.Address))
+        .Select(nft => new
         {
-            n.OrderByDescending(n => n.Slot).First().Address,
-            StakeKey = n.Key.PolicyId + n.Key.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length),
-            Status = n.OrderByDescending(n => n.Slot).First().UtxoStatus,
+            Nft = nft,
+            PrevAddress = dbContext.NftsByAddress.AsNoTracking()
+                .Where(prevNft => prevNft.UtxoStatus == UtxoStatus.Unspent)
+                .Where(prevNft => prevNft.PolicyId == nft.PolicyId && prevNft.AssetName == nft.AssetName && prevNft.Slot < nft.Slot && prevNft.TxHash != nft.TxHash)
+                .OrderByDescending(prevNft => prevNft.Slot)
+                .Select(prevNft => prevNft.Address)
+                .FirstOrDefault()
         })
-        .Join(dbContext.StakePositionByStakeKeys, n => n.StakeKey, s => s.StakeKey, (n, s) => new TransactionHistory
+        .Where(nft => nft.PrevAddress == null || nft.PrevAddress != nft.Nft.Address)
+        .Select(prevNft => prevNft.Nft)
+        .Select(nft => new TransactionHistory
         {
-            Address = n.Address,
-            Type = s.UtxoStatus == UtxoStatus.Spent ? TransactionType.StakePositionClaimed : TransactionType.StakePositionCreated,
-            Amount = new()
-            {
-                PolicyId = s.Amount.MultiAsset.Keys.Last(),
-                AssetName = s.Amount.MultiAsset.Values.Last().Keys.First(),
-                Amount = s.Amount.MultiAsset.Values.Last().Values.First()
-            },
-            Slot = s.Slot,
-            TxHash = s.TxHash
-        })
-        .Where(n => addresses.Contains(n.Address));
+            Address = nft.Address,
+            Type = TransactionType.StakePositionReceived,
+            Amount = dbContext.StakePositionByStakeKeys.AsNoTracking()
+                .Where(spbsk => spbsk.StakeKey == nft.PolicyId + nft.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length))
+                .Select(spbsk => new Asset
+                {
+                    PolicyId = spbsk.Amount.MultiAsset.Keys.Last(),
+                    AssetName = spbsk.Amount.MultiAsset.Values.Last().Keys.First(),
+                    Amount = spbsk.Amount.MultiAsset.Values.Last().Values.First()
+                })
+                .FirstOrDefault()!,
+            Slot = nft.Slot,
+            TxHash = nft.TxHash,
+            UnlockTime = dbContext.StakePositionByStakeKeys.AsNoTracking()
+                .Where(spbsk => spbsk.StakeKey == nft.PolicyId + nft.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length))
+                .Select(spbsk => spbsk.LockTime)
+                .FirstOrDefault(),
+            StakeKey = nft.PolicyId + nft.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length),
+            OutputIndex = nft.OutputIndex
+        });
 
-    var filteredStakeRequests = await filteredStakeRequestsQuery.ToListAsync();
-    var filteredStakePositions = await filteredStakePositionsQuery.ToListAsync();
-    var total = filteredStakeRequests.Count + filteredStakePositions.Count;
-    var transactionHistory = filteredStakeRequests
-        .Concat(filteredStakePositions)
+    var stakePositionTransferredQuery = dbContext.NftsByAddress
+        .AsNoTracking()
+        .Where(nft => nft.UtxoStatus == UtxoStatus.Spent)
+        .Where(nft => addresses.Contains(nft.Address))
+        .Select(nft => new
+        {
+            Nft = nft,
+            NextNft = dbContext.NftsByAddress.AsNoTracking()
+                .Where(nextNft => nextNft.UtxoStatus == UtxoStatus.Unspent)
+                .Where(nextNft => nextNft.PolicyId == nft.PolicyId
+                                && nextNft.AssetName == nft.AssetName
+                                && nextNft.Slot >= nft.Slot
+                                && nextNft.TxHash != nft.TxHash
+                )
+                .OrderBy(nextNft => nextNft.Slot)
+                .Select(nextNft => new { nextNft.Address, nextNft.TxHash })
+                .FirstOrDefault()
+        })
+        .Where(nft => nft.NextNft != null && nft.NextNft.Address != nft.Nft.Address)
+        .Select(nft => new TransactionHistory
+        {
+            Address = nft.Nft.Address,
+            Type = TransactionType.StakePositionTransferred,
+            Amount = dbContext.StakePositionByStakeKeys.AsNoTracking()
+                .Where(spbsk => spbsk.StakeKey == nft.Nft.PolicyId + nft.Nft.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length))
+                .Select(spbsk => new Asset
+                {
+                    PolicyId = spbsk.Amount.MultiAsset.Keys.Last(),
+                    AssetName = spbsk.Amount.MultiAsset.Values.Last().Keys.First(),
+                    Amount = spbsk.Amount.MultiAsset.Values.Last().Values.First()
+                })
+                .FirstOrDefault()!,
+            Slot = nft.Nft.Slot,
+            TxHash = nft.NextNft!.TxHash,
+            UnlockTime = dbContext.StakePositionByStakeKeys.AsNoTracking()
+                .Where(spbsk => spbsk.StakeKey == nft.Nft.PolicyId + nft.Nft.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length))
+                .Select(spbsk => spbsk.LockTime)
+                .FirstOrDefault(),
+            StakeKey = nft.Nft.PolicyId + nft.Nft.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length),
+            TransferredToAddress = nft.NextNft.Address,
+            OutputIndex = nft.Nft.OutputIndex
+        });
+
+    var stakePositionRedeemedQuery = dbContext.StakePositionByStakeKeys
+        .AsNoTracking()
+        .Where(spbsk => spbsk.UtxoStatus == UtxoStatus.Spent)
+        .Select(spbsk => new TransactionHistory
+        {
+            Address = dbContext.NftsByAddress.AsNoTracking()
+                .Where(nft => nft.PolicyId + nft.AssetName.Substring(configuration["StakeKeyPrefix"]!.Length) == spbsk.StakeKey)
+                .OrderByDescending(nft => nft.Slot)
+                .Select(nft => nft.Address)
+                .FirstOrDefault()!,
+            Type = TransactionType.StakePositionRedeemed,
+            Amount = new Asset
+            {
+                PolicyId = spbsk.Amount.MultiAsset.Keys.Last(),
+                AssetName = spbsk.Amount.MultiAsset.Values.Last().Keys.First(),
+                Amount = spbsk.Amount.MultiAsset.Values.Last().Values.First()
+            },
+            Slot = spbsk.Slot,
+            TxHash = spbsk.TxHash,
+            UnlockTime = spbsk.LockTime,
+            StakeKey = spbsk.StakeKey,
+            OutputIndex = spbsk.TxIndex
+        })
+        .Where(history => addresses.Contains(history.Address));
+
+
+    // Temporary Workaround for Union/Concat
+    var stakeRequest = await stakeRequestQuery.ToListAsync();
+    var stakePositionReceived = await stakePositionReceivedQuery.ToListAsync();
+    var stakePositionTransferred = await stakePositionTransferredQuery.ToListAsync();
+    var stakePositionRedeemed = await stakePositionRedeemedQuery.ToListAsync();
+
+    var combined = stakeRequest
+        .Concat(stakePositionReceived)
+        .Concat(stakePositionTransferred)
+        .Concat(stakePositionRedeemed);
+
+    var total = combined.Count();
+    var transactionHistory = combined
         .OrderByDescending(th => th.Slot)
         .Skip(offset)
-        .Take(limit ?? 10)
+        .Take(limit ?? total)
         .ToList();
 
     return Results.Ok(new { Total = total, Data = transactionHistory });
