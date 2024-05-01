@@ -113,7 +113,7 @@ public class Worker(
             string[] entry = line.Item2.Split(',');
             string address = entry[0];
             string lovelaceString = entry[1];
-            ulong lovelace = lovelaceString == "" ? 0 : ulong.Parse(lovelaceString);
+            ulong lovelace = string.IsNullOrEmpty(lovelaceString) ? 0 : ulong.Parse(lovelaceString);
 
             // Assets are the column names starting from the 3rd column, and the cells contain the amount
             // Except for the last column which is the transaction hash
@@ -127,7 +127,7 @@ public class Worker(
                 string policyId = unit[..56];
                 string assetName = unit[56..];
 
-                if (u == "") return null;
+                if (string.IsNullOrEmpty(u)) return null;
 
                 return new Asset()
                 {
