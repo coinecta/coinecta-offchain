@@ -18,10 +18,10 @@ static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
 {
     return HttpPolicyExtensions
         .HandleTransientHttpError()
-        .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.NotFound)
+        .OrResult(msg => !msg.IsSuccessStatusCode)
         .WaitAndRetryAsync(8, retryAttempt => TimeSpan.FromMilliseconds(Math.Pow(3, retryAttempt)),
             onRetry: (outcome, timespan, retryAttempt, context) =>
             {
-                Console.WriteLine($"Retry {retryAttempt} after {timespan.TotalSeconds} seconds");
+                Console.WriteLine($"Retry {retryAttempt} after {timespan.TotalSeconds} seconds due to {outcome.Result?.StatusCode}");
             });
 }
