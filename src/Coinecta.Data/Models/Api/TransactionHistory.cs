@@ -21,6 +21,7 @@ public record TransactionHistory
     public ulong Lovelace { get; set; }
     public Dictionary<string, Dictionary<string, ulong>>? Assets { get; set; }
     public string TxHash { get; set; } = string.Empty;
+    public long CreatedAt { get; set; }
 
     // Stake Request
     public string? LockDuration { get; set; }
