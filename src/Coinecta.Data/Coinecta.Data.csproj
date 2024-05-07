@@ -12,4 +12,10 @@
     <PackageReference Include="SAIB.Cardano.Sync" Version="0.2.17-alpha" />
     <PackageReference Include="SAIB.CardanoSharp.Wallet" Version="7.1.1" />
   </ItemGroup>
+
+  <ItemGroup>
+      <EmbeddedResource Include="Migrations/Sql/*.sql">
+          <Link>Migrations/Sql/%(FileName)%(Extension)</Link>
+      </EmbeddedResource>
+  </ItemGroup>
 </Project>

@@ -240,7 +240,6 @@ app.MapPost("/transaction/history", async (
         UnlockTime = t.UnlockTime == 0 ? null : t.UnlockTime,
         StakeKey = t.StakeKey,
         TransferredToAddress = t.TransferredToAddress,
-
     }).ToList();
 
     return Results.Ok(new { Total = txHistoryRaw.FirstOrDefault()?.TotalCount ?? 0, Data = txHistory });
