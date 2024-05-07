@@ -18,6 +18,8 @@ using CardanoSharp.Wallet.Extensions.Models.Transactions;
 using PeterO.Cbor2;
 using CardanoSharp.Wallet.CIPs.CIP2.Extensions;
 using Coinecta.Data.Models;
+using Asset = Coinecta.Data.Models.Api.Asset;
+using System.Text.Json;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -68,7 +70,6 @@ WebApplication app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
-
 
 app.UseHttpsRedirection();
 
@@ -177,7 +178,7 @@ app.MapPost("/stake/summary", async (IDbContextFactory<CoinectaDbContext> dbCont
 .WithName("GetStakeSummaryByStakeKeys")
 .WithOpenApi();
 
-app.MapPost("/stake/requests/", async (
+app.MapPost("/stake/requests", async (
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
     IConfiguration configuration,
     [FromBody] List<string> addresses,
@@ -209,6 +210,41 @@ app.MapPost("/stake/requests/", async (
     return Results.Ok(new { Total = totalCount, Data = pagedData, Extra = new { SlotData = slotData } });
 })
 .WithName("GetStakeRequestsByAddresses")
+.WithOpenApi();
+
+
+app.MapPost("/transaction/history", async (
+    IDbContextFactory<CoinectaDbContext> dbContextFactory,
+    IConfiguration configuration,
+    [FromBody] List<string> addresses,
+    [FromQuery] int offset = 0,
+    [FromQuery] int limit = 10
+) =>
+{
+    using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
+    var txHistoryRaw = await dbContext.Database
+        .SqlQuery<TransactionHistoryRaw>($@"
+            SELECT * FROM coinecta.GetTransactionHistoryByAddress({addresses}, {offset}, {limit})
+        ")
+        .ToListAsync();
+
+    var txHistory = txHistoryRaw.Select(t => new TransactionHistory()
+    {
+        Address = t.Address,
+        TxType = t.TxType,
+        Lovelace = t.Lovelace,
+        Assets = t.Assets != null ? JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, ulong>>>(t.Assets) : null,
+        TxHash = t.TxHash,
+        LockDuration = t.LockDuration,
+        UnlockTime = t.UnlockTime == 0 ? null : t.UnlockTime,
+        StakeKey = t.StakeKey,
+        TransferredToAddress = t.TransferredToAddress,
+    }).ToList();
+
+    return Results.Ok(new { Total = txHistoryRaw.FirstOrDefault()?.TotalCount ?? 0, Data = txHistory });
+})
+.WithName("GetTransactionHistoryByAddresses")
 .WithOpenApi();
 
 app.MapGet("/stake/requests/pending", async (
@@ -326,7 +362,7 @@ app.MapGet("/stake/stats", async (
         .Select(sp =>
         {
             string[] lockedAssets = sp.LockedAsset!.Trim('[', ']').Trim('(', ')').Split(',');
-            LockedAsset asset = new()
+            Asset asset = new()
             {
                 PolicyId = lockedAssets[0],
                 AssetName = Encoding.UTF8.GetString(Convert.FromHexString(lockedAssets[1].Trim())),
