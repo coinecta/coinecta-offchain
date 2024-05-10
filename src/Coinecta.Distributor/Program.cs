@@ -9,6 +9,14 @@ builder.Services.AddHttpClient("SubmitApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["CardanoSubmitApiUrl"]!);
 })
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    HttpClientHandler handler = new()
+    {
+        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+    return handler;
+})
 .AddPolicyHandler(HttpPolicyExtensions
     .HandleTransientHttpError()
     .OrResult(msg => !msg.IsSuccessStatusCode)
