@@ -255,7 +255,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         ITransactionBodyBuilder txBodyBuilder = TransactionBodyBuilder.Create;
         List<RedeemerBuilder> redeemerBuilders = [];
         ITokenBundleBuilder mintAssets = TokenBundleBuilder.Create;
-        Dictionary<string, Dictionary<string, ulong>> multiAssetWalletOutput = [];
         ITokenBundleBuilder walletBurnAssets = TokenBundleBuilder.Create;
 
         // Total Wallet Output
@@ -268,6 +267,8 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
                 MultiAsset = []
             }
         };
+
+        Dictionary<string, Dictionary<string, long>> stakeOutputs = [];
 
         ulong lowestLockTime = 0;
         stakePositions.ForEach(stakePosition =>
@@ -285,41 +286,13 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
                 Index = (uint)stakePosition.TxIndex
             };
 
-            ITokenBundleBuilder multiAssetInput = TokenBundleBuilder.Create;
-            stakePosition.Amount.MultiAsset.Keys.ToList().ForEach((policyId) =>
-            {
-                Dictionary<string, ulong> asset = stakePosition.Amount.MultiAsset[policyId];
-                asset.Keys.ToList().ForEach((assetName) =>
-                {
-                    byte[] policyIdBytes = Convert.FromHexString(policyId);
-                    byte[] assetNameBytes = Convert.FromHexString(assetName);
+            // Convert ulong to long
+            var stakeInput = CoinectaUtils.ConvertMultiAssetValueToLong(stakePosition.Amount.MultiAsset);
+            var stakeOutputMultiAsset = stakePosition.Amount.MultiAsset;
+            stakeOutputMultiAsset[stakeMintingPolicy].Remove(referenceAssetName);
+            Dictionary<string, Dictionary<string, long>> stakeOutput = CoinectaUtils.ConvertMultiAssetValueToLong(stakeOutputMultiAsset);
 
-                    multiAssetInput.AddToken(policyIdBytes, assetNameBytes, (long)asset[assetName]);
-
-                    if (assetName != referenceAssetName)
-                    {
-                        bool exists = multiAssetWalletOutput.ContainsKey(policyId);
-
-                        if (exists)
-                        {
-                            bool assetExists = multiAssetWalletOutput[policyId].ContainsKey(assetName);
-
-                            if (assetExists)
-                            {
-                                multiAssetWalletOutput[policyId][assetName] += asset[assetName];
-                            }
-                            else
-                            {
-                                multiAssetWalletOutput[policyId].Add(assetName, asset[assetName]);
-                            }
-                        }
-                        else
-                        {
-                            multiAssetWalletOutput.Add(policyId, new() { { assetName, asset[assetName] } });
-                        }
-                    }
-                });
-            });
+            stakeOutputs = TokenUtility.MergeStringDictionaries(stakeOutputs, stakeOutput);
 
             TransactionOutput stakePositionOutput = new()
             {
@@ -327,7 +300,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
                 Value = new()
                 {
                     Coin = stakePosition.Amount.Coin,
-                    MultiAsset = multiAssetInput.Build()
+                    MultiAsset = TokenUtility.ConvertStringKeysToByteArrays(stakeInput)
                 },
                 DatumOption = new()
                 {
@@ -350,6 +323,9 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             walletOutput.Value.Coin += stakePosition.Amount.Coin;
         });
 
+        // Set merged wallet output multiasset
+        walletOutput.Value.MultiAsset = TokenUtility.ConvertStringKeysToByteArrays(stakeOutputs);
+
         // Mint Redeemer
         RedeemerBuilder? mintRedeemerBuilder = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Mint)
@@ -358,24 +334,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             .SetExUnits(new ExUnits { Mem = 0, Steps = 0 }) as RedeemerBuilder;
 
         redeemerBuilders.Add(mintRedeemerBuilder!);
-
-        ITokenBundleBuilder multiAssetOutputBuilder = TokenBundleBuilder.Create;
-
-        multiAssetWalletOutput.Keys.ToList().ForEach((policyId) =>
-        {
-            Dictionary<string, ulong> asset = multiAssetWalletOutput[policyId];
-            asset.Keys.ToList().ForEach((assetName) =>
-            {
-                byte[] policyIdBytes = Convert.FromHexString(policyId);
-                byte[] assetNameBytes = Convert.FromHexString(assetName);
-                multiAssetOutputBuilder.AddToken(policyIdBytes, assetNameBytes, (long)asset[assetName]);
-            });
-        });
-
-        walletOutput.Value.MultiAsset = multiAssetOutputBuilder.Build();
-        txBodyBuilder.AddOutput(walletOutput);
         txBodyBuilder.SetMint(mintAssets);
-
         txBodyBuilder.SetScriptDataHash(
             redeemerBuilders.Select(redeemerBuilder => redeemerBuilder!.Build()).ToList(),
             [],
@@ -406,22 +365,47 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         CoinSelection stakeKeyInputsResult = CoinectaUtils.GetCoinSelection([nftOutput], walletUtxos, walletAddress.ToString());
 
         stakeKeyInputsResult.SelectedUtxos.ForEach(input => txBodyBuilder.AddInput(input));
-        stakeKeyInputsResult.ChangeOutputs.ForEach(output => txBodyBuilder.AddOutput(output));
         stakeKeyInputsResult.SelectedUtxos.ForEach(utxo => walletUtxos.Remove(item: utxo));
 
-        // Coin Selection for Collateral
-        TransactionOutput collateralOutput = new()
-        {
-            Address = walletAddress.GetBytes(),
-            Value = new()
-            {
-                Coin = 5_000_000,
-            }
-        };
+        // Add last change output to the wallet output
+        TransactionOutput lastChangeOutput = stakeKeyInputsResult.ChangeOutputs.First();
 
-        walletUtxos = CoinectaUtils.GetPureAdaUtxos(walletUtxos);
-        CoinSelection collateralInputResult = CoinectaUtils.GetCoinSelection([collateralOutput], walletUtxos, walletAddress.ToString(), limit: 1);
-        collateralInputResult.Inputs.ForEach(input => txBodyBuilder.AddCollateralInput(input));
+        ulong finalWalletOutputLovelace = walletOutput.Value.Coin + lastChangeOutput.Value.Coin;
+        Dictionary<byte[], NativeAsset> finalWalletOutputMultiAsset = TokenUtility.ConvertStringKeysToByteArrays(TokenUtility.MergeStringDictionaries(
+            TokenUtility.ConvertKeysToHexStrings(walletOutput.Value.MultiAsset),
+            TokenUtility.ConvertKeysToHexStrings(lastChangeOutput.Value.MultiAsset)
+        ));
+
+        walletOutput.Value.Coin = finalWalletOutputLovelace;
+        walletOutput.Value.MultiAsset = finalWalletOutputMultiAsset;
+
+        txBodyBuilder.AddOutput(walletOutput);
+
+        // Coin Selection for Collateral
+        if (!string.IsNullOrEmpty(request.CollateralUtxoCbor))
+        {
+            var collateral = CoinectaUtils.ConvertUtxoListCbor([request.CollateralUtxoCbor]).First();
+            txBodyBuilder.AddCollateralInput(new()
+            {
+                TransactionId = Convert.FromHexString(collateral.TxHash),
+                TransactionIndex = collateral.TxIndex,
+            });
+        }
+        else
+        {
+            TransactionOutput collateralOutput = new()
+            {
+                Address = walletAddress.GetBytes(),
+                Value = new()
+                {
+                    Coin = 5_000_000,
+                }
+            };
+
+            walletUtxos = CoinectaUtils.GetPureAdaUtxos(walletUtxos);
+            CoinSelection collateralInputResult = CoinectaUtils.GetCoinSelection([collateralOutput], walletUtxos, walletAddress.ToString(), limit: 1);
+            collateralInputResult.Inputs.ForEach(input => txBodyBuilder.AddCollateralInput(input));
+        }
 
         List<TransactionInput> txInputs = [.. txBodyBuilder.Build().TransactionInputs];
         txInputs.Sort((a, b) =>
@@ -458,7 +442,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
         txBuilder.SetBody(txBodyBuilder);
         txBuilder.SetWitnesses(txWitnesssetBuilder);
-
 
         Transaction tx = txBuilder.BuildAndSetExUnits(network);
         uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);

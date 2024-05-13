@@ -31,7 +31,7 @@ public static class Utils
             txOutputBuilder.SetAddress(new Address(output.Address).GetBytes());
             txOutputBuilder.SetTransactionOutputValue(outputValue);
 
-            var minLovelaceRequired = CalculateMinAdaRequired(txOutputBuilder.Build());
+            var minLovelaceRequired = txOutputBuilder.Build().CalculateMinUtxoLovelace();
             var lovelaceAmount = Math.Max(minLovelaceRequired, output.Lovelace);
 
             outputValue.Coin = lovelaceAmount;
@@ -163,7 +163,7 @@ public static class Utils
 
     public static Utxo MapUtxoByAddressToUtxo(TransactionInput input, TransactionOutput output)
     {
-        Utxo utxo = new Utxo
+        Utxo utxo = new()
         {
             Balance = new Balance(),
             TxHash = input.TransactionId.ToStringHex(),
@@ -201,16 +201,5 @@ public static class Utils
             1177 => NetworkType.Preview,
             _ => throw new NotImplementedException()
         };
-    }
-
-    public static ulong CalculateMinAdaRequired(TransactionOutput output)
-    {
-        var coinPerUtxoWord = 34_482.0;
-        var coinPerUtxoByte = coinPerUtxoWord / 8.0 /* Add buffer? */ + 100;
-
-        // The formula is: (160 + |serialized_output|) * coinsPerUTxOByte
-        var size = output.GetCBOR().EncodeToBytes().Length;
-
-        return (ulong)((160 + size) * coinPerUtxoByte);
     }
 }
