@@ -267,6 +267,28 @@ public static class CoinectaUtils
         return balanceAssets;
     }
 
+    public static Dictionary<string, Dictionary<string, long>> ConvertMultiAssetValueToLong(Dictionary<string, Dictionary<string, ulong>> multiAsset)
+    {
+        Dictionary<string, Dictionary<string, long>> convertedStakeInput = [];
+        foreach (var outerPair in multiAsset)
+        {
+            Dictionary<string, long> innerDict = [];
+            foreach (var innerPair in outerPair.Value)
+            {
+                // Convert ulong to long by casting
+                // Ensure that the ulong value is within the range of long to avoid data loss or runtime errors
+                if (innerPair.Value <= (ulong)long.MaxValue)
+                    innerDict.Add(innerPair.Key, (long)innerPair.Value);
+                else
+                    throw new OverflowException($"Value too large to convert to long: {innerPair.Value}");
+            }
+
+            convertedStakeInput.Add(outerPair.Key, innerDict);
+        }
+
+        return convertedStakeInput;
+    }
+
     public static List<Utxo> ConvertUtxosByAddressToUtxo(List<UtxoByAddress> utxosByAddress)
     {
         List<Utxo> resolvedUtxos = utxosByAddress
