@@ -373,7 +373,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         });
 
         walletOutput.Value.MultiAsset = multiAssetOutputBuilder.Build();
-        txBodyBuilder.AddOutput(walletOutput);
         txBodyBuilder.SetMint(mintAssets);
 
         txBodyBuilder.SetScriptDataHash(
@@ -408,6 +407,26 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         stakeKeyInputsResult.SelectedUtxos.ForEach(input => txBodyBuilder.AddInput(input));
         stakeKeyInputsResult.ChangeOutputs.ForEach(output => txBodyBuilder.AddOutput(output));
         stakeKeyInputsResult.SelectedUtxos.ForEach(utxo => walletUtxos.Remove(item: utxo));
+
+        // Add last change output to the wallet output
+        TransactionOutput lastChangeOutput = txBodyBuilder.Build().TransactionOutputs.Last();
+
+        ulong finalWalletOutputLovelace = walletOutput.Value.Coin + lastChangeOutput.Value.Coin;
+        Dictionary<byte[], NativeAsset> finalWalletOutputMultiAsset = TokenUtility.ConvertStringKeysToByteArrays(TokenUtility.MergeStringDictionaries(
+            TokenUtility.ConvertKeysToHexStrings(walletOutput.Value.MultiAsset),
+            TokenUtility.ConvertKeysToHexStrings(lastChangeOutput.Value.MultiAsset)
+        ));
+
+        TransactionOutput finalWalletOutput = new()
+        {
+            Value = new()
+            {
+                Coin = finalWalletOutputLovelace,
+                MultiAsset = finalWalletOutputMultiAsset
+            }
+        };
+
+        txBodyBuilder.AddOutput(finalWalletOutput);
 
         // Coin Selection for Collateral
         TransactionOutput collateralOutput = new()
@@ -458,7 +477,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
         txBuilder.SetBody(txBodyBuilder);
         txBuilder.SetWitnesses(txWitnesssetBuilder);
-
 
         Transaction tx = txBuilder.BuildAndSetExUnits(network);
         uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
