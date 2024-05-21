@@ -15,11 +15,27 @@ builder.Services.AddSingleton(new JsonSerializerOptions
 builder.Services.AddHttpClient("SubmitApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["CardanoSubmitApiUrl"]!);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    HttpClientHandler handler = new()
+    {
+        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+    return handler;
 });
 
 builder.Services.AddHttpClient("CoinectaApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["CoinectaApiBaseUrl"]!);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    HttpClientHandler handler = new()
+    {
+        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+    return handler;
 });
 
 var host = builder.Build();

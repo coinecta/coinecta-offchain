@@ -193,7 +193,7 @@ public static class CoinectaUtils
         int limit = 20, ulong feeBuffer = 0uL)
     {
         RandomImproveStrategy coinSelectionStrategy = new();
-        MultiSplitChangeSelectionStrategy changeCreationStrategy = new();
+        SingleTokenBundleStrategy changeCreationStrategy = new();
         CoinSelectionService coinSelectionService = new(coinSelectionStrategy, changeCreationStrategy);
 
         int retry = 0;
