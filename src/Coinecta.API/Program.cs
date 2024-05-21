@@ -236,6 +236,7 @@ app.MapPost("/transaction/history", async (
         Lovelace = t.Lovelace,
         Assets = t.Assets != null ? JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, ulong>>>(t.Assets) : null,
         TxHash = t.TxHash,
+        TxIndex = t.OutputIndex,
         CreatedAt = CoinectaUtils.TimeFromSlot(CoinectaUtils.GetNetworkType(configuration), (long)t.Slot),
         LockDuration = t.LockDuration,
         UnlockTime = t.UnlockTime == 0 ? null : t.UnlockTime,
