@@ -170,26 +170,12 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         // Wallet coin selection
         Address changeAddress = new(walletUtxos.First().OutputAddress);
 
-        TransactionOutput collateralOutput = new()
-        {
-            Address = changeAddress.GetBytes(),
-            Value = new()
-            {
-                Coin = 5_000_000,
-                MultiAsset = []
-            }
-        };
-
         TransactionOutput walletOutput = new()
         {
             Address = changeAddress.GetBytes(),
             Value = walletOutputValue,
         };
 
-        walletUtxos = CoinectaUtils.GetPureAdaUtxos(walletUtxos);
-        CoinSelection coinSelectionResult = CoinectaUtils
-            .GetCoinSelection([collateralOutput], walletUtxos, changeAddress.ToString(), limit: 1)
-                ?? throw new Exception("Coin selection failed");
 
         RedeemerBuilder? redeemerBuilder = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Spend)
@@ -206,10 +192,35 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             CostModelUtility.PlutusV2CostModel.Serialize());
         txBodyBuilder.AddReferenceInput(stakeProxyReferenceInput);
         txBodyBuilder.AddRequiredSigner(stakeRequestData.StakePoolProxy.Owner.KeyHash);
-        coinSelectionResult.Inputs.ForEach(input => txBodyBuilder.AddCollateralInput(input));
 
         ITransactionWitnessSetBuilder txWitnesssetBuilder = TransactionWitnessSetBuilder.Create;
         txWitnesssetBuilder.AddRedeemer(redeemerBuilder!.Build());
+
+        // Coin Selection for Collateral
+        if (!string.IsNullOrEmpty(request.CollateralUtxoCbor))
+        {
+            var collateral = CoinectaUtils.ConvertUtxoListCbor([request.CollateralUtxoCbor]).First();
+            txBodyBuilder.AddCollateralInput(new()
+            {
+                TransactionId = Convert.FromHexString(collateral.TxHash),
+                TransactionIndex = collateral.TxIndex,
+            });
+        }
+        else
+        {
+            TransactionOutput collateralOutput = new()
+            {
+                Address = changeAddress.GetBytes(),
+                Value = new()
+                {
+                    Coin = 5_000_000,
+                }
+            };
+
+            walletUtxos = CoinectaUtils.GetPureAdaUtxos(walletUtxos);
+            CoinSelection collateralInputResult = CoinectaUtils.GetCoinSelection([collateralOutput], walletUtxos, changeAddress.ToString(), limit: 1);
+            collateralInputResult.Inputs.ForEach(input => txBodyBuilder.AddCollateralInput(input));
+        }
 
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
         txBuilder.SetBody(txBodyBuilder);
