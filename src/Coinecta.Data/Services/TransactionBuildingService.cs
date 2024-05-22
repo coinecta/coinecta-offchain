@@ -383,7 +383,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         Dictionary<byte[], NativeAsset> combinedChangeOutputAssets = TokenUtility.ConvertStringKeysToByteArrays(
             stakeKeyInputsResult.ChangeOutputs
                 .Select(change => TokenUtility.ConvertKeysToHexStrings(change.Value.MultiAsset))
-                .Aggregate(new Dictionary<string, Dictionary<string, long>>(), (acc, change) => TokenUtility.MergeStringDictionaries(acc, change))
+                .Aggregate(new Dictionary<string, Dictionary<string, long>>(), TokenUtility.MergeStringDictionaries)
         );
 
         walletOutput.Value.Coin += combinedChangeOutputLovelace;
