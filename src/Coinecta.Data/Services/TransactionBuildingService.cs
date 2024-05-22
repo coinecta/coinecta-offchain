@@ -378,18 +378,24 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         stakeKeyInputsResult.SelectedUtxos.ForEach(input => txBodyBuilder.AddInput(input));
         stakeKeyInputsResult.SelectedUtxos.ForEach(utxo => walletUtxos.Remove(item: utxo));
 
-        // Add last change output to the wallet output
-        TransactionOutput lastChangeOutput = stakeKeyInputsResult.ChangeOutputs.First();
 
-        ulong finalWalletOutputLovelace = walletOutput.Value.Coin + lastChangeOutput.Value.Coin;
-        Dictionary<byte[], NativeAsset> finalWalletOutputMultiAsset = TokenUtility.ConvertStringKeysToByteArrays(TokenUtility.MergeStringDictionaries(
-            TokenUtility.ConvertKeysToHexStrings(walletOutput.Value.MultiAsset),
-            TokenUtility.ConvertKeysToHexStrings(lastChangeOutput.Value.MultiAsset)
-        ));
+        // Combine wallet output and change output
+        ulong combinedChangeOutputLovelace = stakeKeyInputsResult.ChangeOutputs.Aggregate(0UL, (acc, change) => acc + change.Value.Coin);
+        Dictionary<byte[], NativeAsset> combinedChangeOutputAssets = TokenUtility.ConvertStringKeysToByteArrays(
+            stakeKeyInputsResult.ChangeOutputs
+                .Select(change => TokenUtility.ConvertKeysToHexStrings(change.Value.MultiAsset))
+                .Aggregate(new Dictionary<string, Dictionary<string, long>>(), (acc, change) => TokenUtility.MergeStringDictionaries(acc, change))
+        );
 
-        walletOutput.Value.Coin = finalWalletOutputLovelace;
-        walletOutput.Value.MultiAsset = finalWalletOutputMultiAsset;
+        walletOutput.Value.Coin += combinedChangeOutputLovelace;
+        walletOutput.Value.MultiAsset = TokenUtility.ConvertStringKeysToByteArrays(
+            TokenUtility.MergeStringDictionaries(
+                TokenUtility.ConvertKeysToHexStrings(combinedChangeOutputAssets),
+                TokenUtility.ConvertKeysToHexStrings(walletOutput.Value.MultiAsset)
+            )
+        );
 
+        // Add the combined change output
         txBodyBuilder.AddOutput(walletOutput);
 
         // Coin Selection for Collateral
