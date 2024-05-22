@@ -378,7 +378,6 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         stakeKeyInputsResult.SelectedUtxos.ForEach(input => txBodyBuilder.AddInput(input));
         stakeKeyInputsResult.SelectedUtxos.ForEach(utxo => walletUtxos.Remove(item: utxo));
 
-
         // Combine wallet output and change output
         ulong combinedChangeOutputLovelace = stakeKeyInputsResult.ChangeOutputs.Aggregate(0UL, (acc, change) => acc + change.Value.Coin);
         Dictionary<byte[], NativeAsset> combinedChangeOutputAssets = TokenUtility.ConvertStringKeysToByteArrays(
