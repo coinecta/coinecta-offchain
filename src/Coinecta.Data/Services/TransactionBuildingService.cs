@@ -301,6 +301,12 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             var stakeInput = CoinectaUtils.ConvertMultiAssetValueToLong(stakePosition.Amount.MultiAsset);
             var stakeOutputMultiAsset = stakePosition.Amount.MultiAsset;
             stakeOutputMultiAsset[stakeMintingPolicy].Remove(referenceAssetName);
+
+            if (stakeOutputMultiAsset[stakeMintingPolicy].Count <= 0)
+            {
+                stakeOutputMultiAsset.Remove(stakeMintingPolicy);
+            }
+
             Dictionary<string, Dictionary<string, long>> stakeOutput = CoinectaUtils.ConvertMultiAssetValueToLong(stakeOutputMultiAsset);
 
             stakeOutputs = TokenUtility.MergeStringDictionaries(stakeOutputs, stakeOutput);
