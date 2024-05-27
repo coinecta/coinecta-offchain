@@ -34,6 +34,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
     public async Task<string> AddStakeAsync(AddStakeRequest request)
     {
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
         List<StakePoolByAddress> stakePools = await dbContext.StakePoolByAddresses
             .Where(s => s.Address == request.StakePool.Address)
             .OrderByDescending(s => s.Slot)
@@ -115,16 +116,25 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         txBuilder.SetBody(txBodyBuilder);
         txBuilder.SetWitnesses(TransactionWitnessSetBuilder.Create);
 
-        Transaction tx = txBuilder.Build();
-        uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
-        tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
-        string unsignedTxCbor = Convert.ToHexString(tx.Serialize());
+        try
+        {
+            Transaction tx = txBuilder.Build();
+            uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
+            tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
+            string unsignedTxCbor = Convert.ToHexString(tx.Serialize());
 
-        return unsignedTxCbor;
+            return unsignedTxCbor;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Error building transaction: " + ex.Message);
+        }
     }
 
     public async Task<string> CancelStakeAsync(CancelStakeRequest request)
     {
+        if (request.CollateralUtxoCbor is null) throw new Exception("Missing collateral UTXO.");
+
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
 
         StakeRequestByAddress stakeRequestData = await dbContext.StakeRequestByAddresses
@@ -226,16 +236,25 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         txBuilder.SetBody(txBodyBuilder);
         txBuilder.SetWitnesses(txWitnesssetBuilder);
 
-        Transaction tx = txBuilder.BuildAndSetExUnits(network);
-        uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
-        tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
-        string unsignedTxCbor = Convert.ToHexString(tx.Serialize());
+        try
+        {
+            Transaction tx = txBuilder.BuildAndSetExUnits(network);
+            uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
+            tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
+            string unsignedTxCbor = Convert.ToHexString(tx.Serialize());
 
-        return unsignedTxCbor;
+            return unsignedTxCbor;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Error building transaction: " + ex.Message);
+        }
     }
 
     public async Task<string> ClaimStakeAsync(ClaimStakeRequest request)
     {
+        if (request.CollateralUtxoCbor is null) throw new Exception("Missing collateral UTXO.");
+
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
 
         string referenceKeyPrefix = configuration["ReferenceKeyPrefix"]!;
@@ -459,12 +478,19 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         txBuilder.SetBody(txBodyBuilder);
         txBuilder.SetWitnesses(txWitnesssetBuilder);
 
-        Transaction tx = txBuilder.BuildAndSetExUnits(network);
-        uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
-        tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
-        string unsignedTxCbor = Convert.ToHexString(tx.Serialize());
+        try
+        {
+            Transaction tx = txBuilder.BuildAndSetExUnits(network);
+            uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
+            tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
+            string unsignedTxCbor = Convert.ToHexString(tx.Serialize());
 
-        return unsignedTxCbor;
+            return unsignedTxCbor;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Error building transaction: " + ex.Message);
+        }
     }
 
     public async Task<string> ExecuteStakeAsync(ExecuteStakeRequest request)
