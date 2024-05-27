@@ -39,24 +39,23 @@ public class TransactionModule(TransactionHandler transactionHandlerV1) : Carter
             .WithName("FinalizeTransaction")
             .WithOpenApi();
 
+        group.MapPost("history", transactionHandlerV1.GetTransactionHistoryByAddressesAsync)
+            .WithName("GetTransactionHistoryByAddresses")
+            .WithOpenApi();
 
         group.MapGet("utxos/{address}", transactionHandlerV1.GetUtxosByAddressAsync)
             .WithName("GetAddressUtxos")
             .WithOpenApi();
 
-        group.MapPost("history", transactionHandlerV1.GetTransactionHistoryByAddressesAsync)
-            .WithName("GetTransactionHistoryByAddresses")
-            .WithOpenApi();
-
-        group.MapGet("/transaction/utxos/raw/{address}", transactionHandlerV1.GetRawUtxosByAddressAsync)
+        group.MapGet("utxos/raw/{address}", transactionHandlerV1.GetRawUtxosByAddressAsync)
             .WithName("GetRawUtxosByAddress")
             .WithOpenApi();
 
-        group.MapPost("/transaction/utxos/raw", transactionHandlerV1.GetRawUtxosByAddressesAsync)
+        group.MapPost("utxos/raw", transactionHandlerV1.GetRawUtxosByAddressesAsync)
             .WithName("GetRawUtxosByAddresses")
             .WithOpenApi();
 
-        group.MapPost("/transaction/utxos/raw/balance", transactionHandlerV1.GetBalanceFromRawUtxos)
+        group.MapPost("utxos/raw/balance", transactionHandlerV1.GetBalanceFromRawUtxos)
             .WithName("GetBalanceFromRawUtxos")
             .WithOpenApi();
     }
