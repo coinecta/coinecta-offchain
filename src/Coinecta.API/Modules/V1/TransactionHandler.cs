@@ -1,4 +1,7 @@
 using System.Text.Json;
+using Cardano.Sync;
+using CardanoSharp.Wallet.CIPs.CIP2.Extensions;
+using CardanoSharp.Wallet.Extensions.Models.Transactions;
 using Coinecta.Data;
 using Coinecta.Data.Models.Api;
 using Coinecta.Data.Models.Api.Request;
@@ -7,6 +10,7 @@ using Coinecta.Data.Services;
 using Coinecta.Data.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PeterO.Cbor2;
 
 namespace Coinecta.API.Modules.V1;
 
@@ -134,5 +138,56 @@ public class TransactionHandler(
         }).ToList();
 
         return Results.Ok(new { Total = txHistoryRaw.FirstOrDefault()?.TotalCount ?? 0, Data = txHistory });
+    }
+
+    public async Task<IResult> GetRawUtxosByAddressAsync(string address)
+    {
+        try
+        {
+            CardanoNodeClient client = new();
+            await client.ConnectAsync(configuration["CardanoNodeSocketPath"]!, configuration.GetValue<uint>("CardanoNetworkMagic"));
+            Cardano.Sync.Data.Models.Experimental.UtxosByAddress utxosByAddress = await client.GetUtxosByAddressAsync(address);
+            List<string> result = utxosByAddress.Values.Select(u =>
+                Convert.ToHexString(CBORObject.NewArray().Add(u.Key.Value.GetCBOR()).Add(u.Value.Value.GetCBOR()).EncodeToBytes()).ToLowerInvariant()).ToList();
+
+            return Results.Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(ex.Message);
+        }
+    }
+
+    public async Task<IResult> GetRawUtxosByAddressesAsync(List<string> addresses)
+    {
+        CardanoNodeClient client = new();
+        await client.ConnectAsync(configuration["CardanoNodeSocketPath"]!, configuration.GetValue<uint>("CardanoNetworkMagic"));
+
+        List<string> result = [];
+
+        foreach (string address in addresses.Distinct())
+        {
+            try
+            {
+                Cardano.Sync.Data.Models.Experimental.UtxosByAddress utxosByAddress = await client.GetUtxosByAddressAsync(address);
+                List<string> rawUtxosByAddress = utxosByAddress.Values.Select(u =>
+                    Convert.ToHexString(CBORObject.NewArray().Add(u.Key.Value.GetCBOR()).Add(u.Value.Value.GetCBOR()).EncodeToBytes()).ToLowerInvariant()).ToList();
+                result.AddRange(rawUtxosByAddress);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting utxos for address {address}: {ex.Message}");
+            }
+        }
+
+        return Results.Ok(result);
+    }
+
+    public IResult GetBalanceFromRawUtxos(List<string> utxosCbor)
+    {
+        var utxos = CoinectaUtils.ConvertUtxoListCbor(utxosCbor).ToList();
+        var balance = utxos.AggregateAssets();
+
+        return Results.Ok(balance);
     }
 }
