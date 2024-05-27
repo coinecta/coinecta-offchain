@@ -1,26 +1,10 @@
-using System.Text;
 using Coinecta.Data;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Coinecta.Data.Models.Reducers;
-using Coinecta.Data.Models.Response;
-using Coinecta.Data.Models.Api;
-using Coinecta.Data.Models.Api.Request;
 using Coinecta.Data.Services;
-using Coinecta.Data.Utils;
-using CardanoSharp.Wallet.Enums;
 using Coinecta.Models.Api;
-using CardanoSharp.Wallet.Models;
-using CardanoSharp.Wallet.Utilities;
-using Cardano.Sync.Data.Models.Datums;
-using Cardano.Sync;
-using CardanoSharp.Wallet.Extensions.Models.Transactions;
-using PeterO.Cbor2;
-using CardanoSharp.Wallet.CIPs.CIP2.Extensions;
-using Coinecta.Data.Models;
-using Asset = Coinecta.Data.Models.Api.Asset;
-using System.Text.Json;
 using Carter;
+using Coinecta.API.Modules.V1;
+using Asp.Versioning;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -40,7 +24,24 @@ builder.Services.AddDbContextFactory<CoinectaDbContext>(options =>
         );
 });
 
-builder.Services.AddScoped<TransactionBuildingService>();
+builder.Services.AddCarter();
+builder.Services.AddSingleton<TransactionBuildingService>();
+builder.Services.AddSingleton<TransactionHandler>();
+builder.Services.AddSingleton<StakeHandler>();
+
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1);
+    options.ReportApiVersions = true;
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ApiVersionReader = ApiVersionReader.Combine(
+        new UrlSegmentApiVersionReader(),
+        new HeaderApiVersionReader("X-Api-Version"));
+}).AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'V";
+    options.SubstituteApiVersionInUrl = true;
+});
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

@@ -13,14 +13,8 @@ public class StakeModule(StakeHandler stakeHandlerV1) : CarterModule
             .ReportApiVersions()
             .Build();
 
-        // RouteGroupBuilder group = app
-        //     .MapGroup("/api/v{version:apiVersion}/stake")
-        //     .WithApiVersionSet(apiVersionSet)
-        //     .WithTags("Staking")
-        //     .WithOpenApi();
-
         RouteGroupBuilder group = app
-            .MapGroup("/api/stake")
+            .MapGroup("stake")
             .WithApiVersionSet(apiVersionSet)
             .WithTags("Staking")
             .WithOpenApi();

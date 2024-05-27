@@ -13,14 +13,8 @@ public class TransactionModule(TransactionHandler transactionHandlerV1) : Carter
             .ReportApiVersions()
             .Build();
 
-        // RouteGroupBuilder group = app
-        //     .MapGroup("/api/v{version:apiVersion}/transaction")
-        //     .WithApiVersionSet(apiVersionSet)
-        //     .WithTags("Transaction")
-        //     .WithOpenApi();
-
         RouteGroupBuilder group = app
-            .MapGroup("/api/transaction")
+            .MapGroup("transaction")
             .WithApiVersionSet(apiVersionSet)
             .WithTags("Transaction")
             .WithOpenApi();
@@ -54,73 +48,16 @@ public class TransactionModule(TransactionHandler transactionHandlerV1) : Carter
             .WithName("GetTransactionHistoryByAddresses")
             .WithOpenApi();
 
-        // app.MapGet("/transaction/utxos/raw/{address}", async (string address) =>
-        // {
-        //     try
-        //     {
-        //         CardanoNodeClient client = new();
-        //         await client.ConnectAsync(builder.Configuration["CardanoNodeSocketPath"]!, builder.Configuration.GetValue<uint>("CardanoNetworkMagic"));
-        //         Cardano.Sync.Data.Models.Experimental.UtxosByAddress utxosByAddress = await client.GetUtxosByAddressAsync(address);
-        //         List<string> result = utxosByAddress.Values.Select(u =>
-        //             Convert.ToHexString(CBORObject.NewArray().Add(u.Key.Value.GetCBOR()).Add(u.Value.Value.GetCBOR()).EncodeToBytes()).ToLowerInvariant()).ToList();
+        group.MapGet("/transaction/utxos/raw/{address}", transactionHandlerV1.GetRawUtxosByAddressAsync)
+            .WithName("GetRawUtxosByAddress")
+            .WithOpenApi();
 
-        //         return Results.Ok(result);
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         return Results.BadRequest(ex.Message);
-        //     }
-        // })
-        // .WithName("GetRawUtxosByAddress")
-        // .WithOpenApi();
+        group.MapPost("/transaction/utxos/raw", transactionHandlerV1.GetRawUtxosByAddressesAsync)
+            .WithName("GetRawUtxosByAddresses")
+            .WithOpenApi();
 
-        //     app.MapPost("/transaction/utxos/raw", async (List<string> addresses) =>
-        //     {
-        //         CardanoNodeClient client = new();
-        //         await client.ConnectAsync(builder.Configuration["CardanoNodeSocketPath"]!, builder.Configuration.GetValue<uint>("CardanoNetworkMagic"));
-
-        //         List<string> result = [];
-
-        //         foreach (string address in addresses.Distinct())
-        //         {
-        //             try
-        //             {
-        //                 Cardano.Sync.Data.Models.Experimental.UtxosByAddress utxosByAddress = await client.GetUtxosByAddressAsync(address);
-        //                 List<string> rawUtxosByAddress = utxosByAddress.Values.Select(u =>
-        //                     Convert.ToHexString(CBORObject.NewArray().Add(u.Key.Value.GetCBOR()).Add(u.Value.Value.GetCBOR()).EncodeToBytes()).ToLowerInvariant()).ToList();
-        //                 result.AddRange(rawUtxosByAddress);
-        //             }
-        //             catch (Exception ex)
-        //             {
-        //                 Console.WriteLine($"Error getting utxos for address {address}: {ex.Message}");
-        //             }
-        //         }
-
-        //         return Results.Ok(result);
-        //     })
-        //     .WithName("GetRawUtxosByAddresses")
-        //     .WithOpenApi();
-
-        //     app.MapPost("/transaction/utxos/raw/balance", (List<string> utxosCbor) =>
-        //     {
-        //         var utxos = CoinectaUtils.ConvertUtxoListCbor(utxosCbor).ToList();
-        //         var balance = utxos.AggregateAssets();
-
-        //         return Results.Ok(balance);
-        //     })
-        //     .WithName("GetBalanceFromRawUtxos")
-        //     .WithOpenApi();
-
-        //     app.MapGet("/block/latest", async (IDbContextFactory<CoinectaDbContext> dbContextFactory) =>
-        //     {
-        //         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
-
-        //         Cardano.Sync.Data.Models.Block? result = await dbContext.Blocks.OrderByDescending(b => b.Slot).FirstOrDefaultAsync();
-
-        //         return Results.Ok(result);
-        //     })
-        //     .WithName("GetLatestBlock")
-        //     .WithOpenApi();
-
+        group.MapPost("/transaction/utxos/raw/balance", transactionHandlerV1.GetBalanceFromRawUtxos)
+            .WithName("GetBalanceFromRawUtxos")
+            .WithOpenApi();
     }
 }
