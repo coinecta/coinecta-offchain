@@ -28,7 +28,8 @@ public class CoinectaDbContext
         modelBuilder.Entity<StakePositionByStakeKey>().HasKey(item => new { item.StakeKey, item.Slot, item.TxHash, item.TxIndex, item.UtxoStatus });
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Amount);
         modelBuilder.Entity<StakePositionByStakeKey>().OwnsOne(item => item.Interest);
-        modelBuilder.Entity<UtxoByAddress>().HasKey(item => new { item.Address, item.Slot, item.TxHash, item.TxIndex, item.Status });
+        modelBuilder.Entity<UtxoByAddress>().HasKey(item => item.Address);
+        modelBuilder.Entity<UtxoByAddress>().HasIndex(item => item.LastRequested);
         modelBuilder.Entity<NftByAddress>().HasKey(item => new { item.TxHash, item.OutputIndex, item.Slot, item.PolicyId, item.AssetName, item.UtxoStatus });
         base.OnModelCreating(modelBuilder);
     }

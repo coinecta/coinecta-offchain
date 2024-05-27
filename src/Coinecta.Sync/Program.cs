@@ -15,8 +15,8 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<IReducer, StakePoolByAddressReducer>();
 builder.Services.AddSingleton<IReducer, StakeRequestByAddressReducer>();
 builder.Services.AddSingleton<IReducer, StakePositionByStakeKeyReducer>();
-builder.Services.AddSingleton<IReducer, UtxosByAddressReducer>();
 builder.Services.AddSingleton<IReducer, NftByAddressReducer>();
+builder.Services.AddSingleton<IReducer, UtxosByAddressReducer>();
 
 builder.Services.AddCardanoIndexer<CoinectaDbContext>(builder.Configuration, 60);
 

@@ -66,6 +66,9 @@ public class Worker(
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Request for UTXO update
+            await CoinectaApi.GetAsync($"utxo/refresh?address={CatcherState.CatcherAddress}", stoppingToken);
+
             // Fetch Pending Requests
             List<StakeRequestByAddress> stakeRequests = await FetchStakeRequestsAsync();
 
@@ -186,9 +189,9 @@ public class Worker(
     private async Task<Utxo> GetUpdatedCertificateUtxoAsync()
     {
         _logger.LogInformation("Fetching Certificate Utxo...");
-        List<UtxoByAddress> result = await FetchUtxosAsync();
+        List<string> result = await FetchUtxosAsync();
 
-        List<Utxo> utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
+        List<Utxo> utxos = CoinectaUtils.ConvertUtxoListCbor(result).ToList();
         ITokenBundleBuilder catcherTokenBundle = TokenBundleBuilder.Create;
         catcherTokenBundle.AddToken(Convert.FromHexString(CatcherState.CatcherCertificatePolicyId), Convert.FromHexString(CatcherState.CatcherCertificateAssetName), 1);
 
@@ -212,8 +215,8 @@ public class Worker(
     private async Task<Utxo> GetUpdatedCollateralUtxoAsync()
     {
         _logger.LogInformation("Fetching Collateral Utxo...");
-        List<UtxoByAddress> result = await FetchUtxosAsync();
-        List<Utxo> utxos = CoinectaUtils.ConvertUtxosByAddressToUtxo(result);
+        List<string> result = await FetchUtxosAsync();
+        List<Utxo> utxos = CoinectaUtils.ConvertUtxoListCbor(result).ToList();
         utxos = CoinectaUtils.GetPureAdaUtxos(utxos);
 
         TransactionOutput collateralOutput = new()
@@ -282,7 +285,7 @@ public class Worker(
         return [];
     }
 
-    private async Task<List<UtxoByAddress>> FetchUtxosAsync()
+    private async Task<List<string>> FetchUtxosAsync()
     {
         try
         {
@@ -291,7 +294,7 @@ public class Worker(
             if (response.IsSuccessStatusCode)
             {
                 string jsonString = await response.Content.ReadAsStringAsync();
-                List<UtxoByAddress>? utxosByAddress = JsonSerializer.Deserialize<List<UtxoByAddress>>(jsonString, jsonSerializerOptions);
+                List<string>? utxosByAddress = JsonSerializer.Deserialize<List<string>>(jsonString, jsonSerializerOptions);
                 return utxosByAddress ?? [];
             }
             else
