@@ -881,7 +881,15 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
             tx.TransactionWitnessSet.VKeyWitnesses = witnessSet.VKeyWitnesses;
         }
 
-        string signedTxCbor = Convert.ToHexString(tx.Serialize());
+        byte[] serializedSignedTx = tx.Serialize();
+
+        int maxTransactionSize = 16 * 1024; // 16KB
+        if (serializedSignedTx.Length > maxTransactionSize)
+        {
+            throw new Exception("Transaction size exceeds 16KB");
+        }
+
+        string signedTxCbor = Convert.ToHexString(serializedSignedTx);
 
         return signedTxCbor;
     }
