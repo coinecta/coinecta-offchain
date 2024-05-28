@@ -60,6 +60,26 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         Rational rewardMultiplier = rewardSetting.RewardMultiplier;
         string stakeMintingPolicyId = configuration["CoinectaStakeMintingPolicyId"]!;
 
+        Balance balance = CoinectaUtils.GetBalanceFromRawUtxos(request.WalletUtxoListCbor.ToList());
+        long? walletTokenQuanity = balance.Assets.Where(a =>
+                a.PolicyId.Equals(Convert.ToHexString(stakePoolData.StakePool.PolicyId), StringComparison.InvariantCultureIgnoreCase) &&
+                a.Name.Equals(Convert.ToHexString(stakePoolData.StakePool.AssetName), StringComparison.InvariantCultureIgnoreCase)
+            )
+            .FirstOrDefault()?
+            .Quantity;
+
+        // If not enough tokens
+        if (walletTokenQuanity is null || (ulong)walletTokenQuanity < request.Amount)
+        {
+            throw new Exception("Insufficient token balance. Make sure you have enough tokens in your wallet to stake.");
+        }
+
+        // If not enough ada
+        if (balance.Lovelaces < 6_500_000)
+        {
+            throw new Exception("Insufficient ADA. Make sure you have at least 6.5 ADA + fees to stake.");
+        }
+
         // Stake proxy datum
         StakePoolProxy<NoDatum> stakePoolProxyDatum = new(
             ownerSignature,
@@ -127,7 +147,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         }
         catch (Exception ex)
         {
-            throw new Exception("Error building transaction: " + ex.Message);
+            throw new Exception($"Error building transaction: {ex.Message}. Please contact support for assistance.");
         }
     }
 
@@ -247,7 +267,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         }
         catch (Exception ex)
         {
-            throw new Exception("Error building transaction: " + ex.Message);
+            throw new Exception($"Error building transaction: {ex.Message}. Please contact support for assistance.");
         }
     }
 
@@ -495,7 +515,7 @@ public class TransactionBuildingService(IDbContextFactory<CoinectaDbContext> dbC
         }
         catch (Exception ex)
         {
-            throw new Exception("Error building transaction: " + ex.Message);
+            throw new Exception($"Error building transaction: {ex.Message}. Please contact support for assistance.");
         }
     }
 

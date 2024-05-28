@@ -18,6 +18,7 @@ using Coinecta.Data.Models;
 using Microsoft.Extensions.Configuration;
 using UtxoByAddress = Coinecta.Data.Models.Reducers.UtxoByAddress;
 using CardanoSharp.Wallet.Common;
+using CardanoSharp.Wallet.CIPs.CIP2.Extensions;
 
 namespace Coinecta.Data.Utils;
 
@@ -250,7 +251,7 @@ public static class CoinectaUtils
         multiAsset.Keys.ToList().ForEach((policyId) =>
         {
             string policyIdHex = Convert.ToHexString(policyId).ToLowerInvariant();
-            var asset = multiAsset[policyId];
+            NativeAsset asset = multiAsset[policyId];
             asset.Token.Keys.ToList().ForEach(assetName =>
             {
                 string assetNameHex = Convert.ToHexString(assetName).ToLowerInvariant();
@@ -270,10 +271,10 @@ public static class CoinectaUtils
     public static Dictionary<string, Dictionary<string, long>> ConvertMultiAssetValueToLong(Dictionary<string, Dictionary<string, ulong>> multiAsset)
     {
         Dictionary<string, Dictionary<string, long>> convertedStakeInput = [];
-        foreach (var outerPair in multiAsset)
+        foreach (KeyValuePair<string, Dictionary<string, ulong>> outerPair in multiAsset)
         {
             Dictionary<string, long> innerDict = [];
-            foreach (var innerPair in outerPair.Value)
+            foreach (KeyValuePair<string, ulong> innerPair in outerPair.Value)
             {
                 // Convert ulong to long by casting
                 // Ensure that the ulong value is within the range of long to avoid data loss or runtime errors
@@ -320,6 +321,13 @@ public static class CoinectaUtils
             default:
                 return amountDec.ToString();
         }
+    }
+
+    public static Balance GetBalanceFromRawUtxos(List<string> utxoListCbor)
+    {
+        List<Utxo> utxos = ConvertUtxoListCbor(utxoListCbor).ToList();
+        Balance balance = utxos.AggregateAssets();
+        return balance;
     }
 
     public static string TimeToDateString(long time)
