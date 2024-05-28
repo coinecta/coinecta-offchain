@@ -20,6 +20,7 @@ using Coinecta.Data.Utils;
 using Coinecta.Data.Extensions;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 using Cardano.Sync.Data.Models.Datums;
+using System.Text;
 
 namespace Coinecta.Catcher;
 
@@ -66,8 +67,10 @@ public class Worker(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Request for UTXO update
-            await CoinectaApi.GetAsync($"utxo/refresh?address={CatcherState.CatcherAddress}", stoppingToken);
+            List<string> addresses = [CatcherState.CatcherAddress.ToString()];
+            string addressesJson = JsonSerializer.Serialize(addresses);
+            StringContent content = new(addressesJson, Encoding.UTF8, "application/json");
+            var res = await CoinectaApi.PostAsync($"utxo/refresh", content, stoppingToken);
 
             // Fetch Pending Requests
             List<StakeRequestByAddress> stakeRequests = await FetchStakeRequestsAsync();
