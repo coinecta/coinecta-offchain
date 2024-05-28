@@ -22,7 +22,7 @@ public class UtxoModule(UtxoHandler utxoHandlerV1) : CarterModule
             .WithOpenApi();
 
         group.MapPost("refresh", utxoHandlerV1.UpdateUtxoTrackerAsync)
-        .WithName("RefreshUtxoTrackerAsync")
-        .WithOpenApi();
+            .WithName("RefreshUtxoTrackerAsync")
+            .WithOpenApi();
     }
 }
