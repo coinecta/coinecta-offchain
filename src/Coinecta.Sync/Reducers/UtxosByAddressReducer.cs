@@ -26,8 +26,8 @@ public class UtxosByAddressReducer(
     {
         _dbContext = dbContextFactory.CreateDbContext();
 
-        int expirationMinutes = configuration.GetValue<int>("UtxosByAddressExpirationMinutes");
-        DateTime thresholdTime = DateTime.UtcNow.AddMinutes(-expirationMinutes);
+        int expirationMilliseconds = configuration.GetValue<int>("UtxosByAddressExpirationMillisecond");
+        DateTime thresholdTime = DateTime.UtcNow.AddMilliseconds(-expirationMilliseconds);
 
         List<UtxoByAddress> trackedUtxosByAddress = await _dbContext.UtxosByAddress
             .Where(x => x.LastRequested >= thresholdTime)
@@ -41,7 +41,7 @@ public class UtxosByAddressReducer(
         while (currentBatch < batchCount)
         {
             IEnumerable<UtxoByAddress> batch = trackedUtxosByAddress.Skip(currentBatch * batchSize).Take(batchSize);
-            await Task.WhenAll(trackedUtxosByAddress.Select(async utxoByAddress =>
+            await Task.WhenAll(batch.Select(async utxoByAddress =>
             {
                 try
                 {
