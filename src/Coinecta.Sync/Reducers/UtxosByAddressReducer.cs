@@ -27,25 +27,34 @@ public class UtxosByAddressReducer(
         _dbContext = dbContextFactory.CreateDbContext();
 
         int expirationMinutes = configuration.GetValue<int>("UtxosByAddressExpirationMinutes");
-        var thresholdTime = DateTime.UtcNow.AddMinutes(-expirationMinutes);
+        DateTime thresholdTime = DateTime.UtcNow.AddMinutes(-expirationMinutes);
 
         List<UtxoByAddress> trackedUtxosByAddress = await _dbContext.UtxosByAddress
             .Where(x => x.LastRequested >= thresholdTime)
             .ToListAsync();
 
+        // Process by batches
+        int batchSize = 10;
+        int batchCount = (int)Math.Ceiling((double)trackedUtxosByAddress.Count / batchSize);
+        int currentBatch = 0;
 
-        // @TODO: Process by batches
-        await Task.WhenAll(trackedUtxosByAddress.Select(async utxoByAddress =>
+        while (currentBatch < batchCount)
         {
-            try
+            IEnumerable<UtxoByAddress> batch = trackedUtxosByAddress.Skip(currentBatch * batchSize).Take(batchSize);
+            await Task.WhenAll(trackedUtxosByAddress.Select(async utxoByAddress =>
             {
-                await UpdateUtxosByAddressAsync(utxoByAddress.Address, utxoByAddress);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating UtxosByAddress for {Address}", utxoByAddress.Address);
-            }
-        }));
+                try
+                {
+                    await UpdateUtxosByAddressAsync(utxoByAddress.Address, utxoByAddress);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error updating UtxosByAddress for {Address}", utxoByAddress.Address);
+                }
+            }));
+
+            currentBatch++;
+        }
 
         await _dbContext.SaveChangesAsync();
         _dbContext.Dispose();
