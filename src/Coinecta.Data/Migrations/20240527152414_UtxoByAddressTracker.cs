@@ -11,134 +11,53 @@ namespace Coinecta.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropPrimaryKey(
-                name: "PK_UtxosByAddress",
-                schema: "coinecta",
-                table: "UtxosByAddress");
+            // Drop the existing table
+            migrationBuilder.DropTable(
+                name: "UtxosByAddress",
+                schema: "coinecta");
 
-            migrationBuilder.DropColumn(
-                name: "Slot",
+            // Create the new table with updated schema
+            migrationBuilder.CreateTable(
+                name: "UtxosByAddress",
                 schema: "coinecta",
-                table: "UtxosByAddress");
-
-            migrationBuilder.DropColumn(
-                name: "TxHash",
-                schema: "coinecta",
-                table: "UtxosByAddress");
-
-            migrationBuilder.DropColumn(
-                name: "TxIndex",
-                schema: "coinecta",
-                table: "UtxosByAddress");
-
-            migrationBuilder.DropColumn(
-                name: "Status",
-                schema: "coinecta",
-                table: "UtxosByAddress");
-
-            migrationBuilder.DropColumn(
-                name: "TxOutCbor",
-                schema: "coinecta",
-                table: "UtxosByAddress");
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "LastRequested",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                type: "timestamp with time zone",
-                nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "LastUpdated",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                type: "timestamp with time zone",
-                nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
-
-            migrationBuilder.AddColumn<byte[]>(
-                name: "UtxoListCborBytes",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                type: "bytea",
-                nullable: false,
-                defaultValue: new byte[0]);
-
-            migrationBuilder.AddPrimaryKey(
-                name: "PK_UtxosByAddress",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                column: "Address");
+                columns: table => new
+                {
+                    Address = table.Column<string>(nullable: false),
+                    LastUpdated = table.Column<DateTime>(nullable: false),
+                    LastRequested = table.Column<DateTime>(nullable: false),
+                    UtxoListCborBytes = table.Column<byte[]>(nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UtxosByAddress", x => x.Address);
+                });
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropPrimaryKey(
-                name: "PK_UtxosByAddress",
-                schema: "coinecta",
-                table: "UtxosByAddress");
+            // Drop the new table
+            migrationBuilder.DropTable(
+                name: "UtxosByAddress",
+                schema: "coinecta");
 
-            migrationBuilder.DropColumn(
-                name: "LastRequested",
+            // Recreate the old table with its original schema
+            migrationBuilder.CreateTable(
+                name: "UtxosByAddress",
                 schema: "coinecta",
-                table: "UtxosByAddress");
-
-            migrationBuilder.DropColumn(
-                name: "LastUpdated",
-                schema: "coinecta",
-                table: "UtxosByAddress");
-
-            migrationBuilder.DropColumn(
-                name: "UtxoListCborBytes",
-                schema: "coinecta",
-                table: "UtxosByAddress");
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "Slot",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                type: "numeric(20,0)",
-                nullable: false,
-                defaultValue: 0m);
-
-            migrationBuilder.AddColumn<string>(
-                name: "TxHash",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                type: "text",
-                nullable: false,
-                defaultValue: "");
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "TxIndex",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                type: "numeric(20,0)",
-                nullable: false,
-                defaultValue: 0m);
-
-            migrationBuilder.AddColumn<int>(
-                name: "Status",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
-
-            migrationBuilder.AddColumn<byte[]>(
-                name: "TxOutCbor",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                type: "bytea",
-                nullable: true);
-
-            migrationBuilder.AddPrimaryKey(
-                name: "PK_UtxosByAddress",
-                schema: "coinecta",
-                table: "UtxosByAddress",
-                columns: new[] { "Address", "Slot", "TxHash", "TxIndex", "Status" });
+                columns: table => new
+                {
+                    Address = table.Column<string>(nullable: false),
+                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    TxHash = table.Column<string>(type: "text", nullable: false),
+                    TxIndex = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    TxOutCbor = table.Column<byte[]>(type: "bytea", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UtxosByAddress", x => new { x.Address, x.Slot, x.TxHash, x.TxIndex, x.Status });
+                });
         }
     }
 }
