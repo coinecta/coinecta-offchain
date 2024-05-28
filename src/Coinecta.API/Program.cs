@@ -28,6 +28,7 @@ builder.Services.AddCarter();
 builder.Services.AddSingleton<TransactionBuildingService>();
 builder.Services.AddSingleton<TransactionHandler>();
 builder.Services.AddSingleton<StakeHandler>();
+builder.Services.AddSingleton<UtxoHandler>();
 
 builder.Services.AddApiVersioning(options =>
 {

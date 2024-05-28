@@ -102,12 +102,10 @@ public class TransactionHandler(
             return Results.BadRequest("Invalid address");
         }
 
-        List<UtxoByAddress> result = await dbContext.UtxosByAddress
+        List<string>? result = await dbContext.UtxosByAddress
             .Where(u => u.Address == address)
-            .GroupBy(u => new { u.TxHash, u.TxIndex }) // Group by both TxHash and TxIndex
-            .Where(g => g.Count() < 2)
-            .Select(g => g.First())
-            .ToListAsync();
+            .Select(u => u.UtxoListCbor)
+            .FirstOrDefaultAsync();
 
         return Results.Ok(result);
     }

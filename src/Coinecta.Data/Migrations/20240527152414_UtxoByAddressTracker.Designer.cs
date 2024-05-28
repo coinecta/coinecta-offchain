@@ -4,6 +4,7 @@ using System.Text.Json;
 using Coinecta.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    partial class CoinectaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240527152414_UtxoByAddressTracker")]
+    partial class UtxoByAddressTracker
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -204,8 +207,6 @@ namespace Coinecta.Data.Migrations
                         .HasColumnType("bytea");
 
                     b.HasKey("Address");
-
-                    b.HasIndex("LastRequested");
 
                     b.ToTable("UtxosByAddress", "coinecta");
                 });

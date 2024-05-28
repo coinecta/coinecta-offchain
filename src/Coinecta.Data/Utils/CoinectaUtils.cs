@@ -289,29 +289,6 @@ public static class CoinectaUtils
         return convertedStakeInput;
     }
 
-    public static List<Utxo> ConvertUtxosByAddressToUtxo(List<UtxoByAddress> utxosByAddress)
-    {
-        List<Utxo> resolvedUtxos = utxosByAddress
-            .Select(u =>
-            {
-                var resolvedOutput = ConvertTxOutputCbor(Convert.ToHexString(u.TxOutCbor!));
-                return new Utxo()
-                {
-                    TxHash = u.TxHash,
-                    TxIndex = (uint)u.TxIndex,
-                    OutputAddress = u.Address,
-                    Balance = new()
-                    {
-                        Lovelaces = resolvedOutput.Value.Coin,
-                        Assets = ConvertNativeAssetToBalanceAsset(resolvedOutput.Value.MultiAsset)
-                    }
-                };
-            })
-            .ToList();
-
-        return resolvedUtxos;
-    }
-
     public static string AbbreviateAmount(BigInteger amount, int decimals)
     {
         ulong ten = 10;
