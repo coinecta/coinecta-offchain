@@ -62,6 +62,8 @@ public class UtxosByAddressReducer(
 
     private async Task UpdateUtxosByAddressAsync(string address, UtxoByAddress utxoByAddress)
     {
+        if (string.IsNullOrEmpty(address)) return;
+
         CardanoNodeClient client = new();
         await client.ConnectAsync(configuration["CardanoNodeSocketPath"]!, configuration.GetValue<uint>("CardanoNetworkMagic"));
 
