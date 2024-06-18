@@ -35,7 +35,6 @@ public class UtxosByAddressReducer(
 
         _logger.LogInformation("Fetching UtxosByAddress");
         List<UtxoByAddress> trackedUtxosByAddress = await _dbContext.UtxosByAddress
-            .Where(x => x.LastRequested >= thresholdTime)
             .ToListAsync();
 
         _logger.LogInformation("Updating {Count} UtxosByAddress", trackedUtxosByAddress.Count);
