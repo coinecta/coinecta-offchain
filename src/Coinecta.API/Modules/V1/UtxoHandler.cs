@@ -14,13 +14,14 @@ public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory)
         addresses.ToList().ForEach(address =>
         {
             UtxoByAddress? utxoByAddress = utxoByAddresses.FirstOrDefault(x => x.Address == address);
+            DateTimeOffset currentTime = DateTimeOffset.UtcNow;
             if (utxoByAddress is null)
             {
                 UtxoByAddress newUtxosByAddress = new()
                 {
                     Address = address,
-                    LastUpdated = DateTime.MinValue,
-                    LastRequested = DateTime.UtcNow,
+                    LastUpdated = DateTimeOffset.MinValue,
+                    LastRequested = currentTime,
                     UtxoListCbor = []
                 };
 

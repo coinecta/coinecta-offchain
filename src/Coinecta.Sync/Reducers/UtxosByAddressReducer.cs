@@ -30,11 +30,12 @@ public class UtxosByAddressReducer(
 
         _logger.LogInformation("Updating UtxosByAddress");
         int expirationMilliseconds = configuration.GetValue<int>("UtxosByAddressExpirationMillisecond");
-        DateTime thresholdTime = DateTime.UtcNow.AddMilliseconds(-expirationMilliseconds);
+        DateTimeOffset thresholdTime = DateTimeOffset.UtcNow.AddMilliseconds(-expirationMilliseconds);
         _logger.LogInformation("Threshold time: {ThresholdTime}", thresholdTime);
 
         _logger.LogInformation("Fetching UtxosByAddress");
         List<UtxoByAddress> trackedUtxosByAddress = await _dbContext.UtxosByAddress
+            .Where(x => x.LastRequested >= thresholdTime)
             .ToListAsync();
 
         _logger.LogInformation("Updating {Count} UtxosByAddress", trackedUtxosByAddress.Count);

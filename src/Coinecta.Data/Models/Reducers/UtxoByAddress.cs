@@ -8,8 +8,8 @@ namespace Coinecta.Data.Models.Reducers;
 public class UtxoByAddress
 {
     public string Address { get; init; } = default!;
-    public DateTime LastUpdated { get; set; }
-    public DateTime LastRequested { get; set; }
+    public DateTimeOffset LastUpdated { get; set; }
+    public DateTimeOffset LastRequested { get; set; }
 
     [NotMapped]
     public List<string> UtxoListCbor { get; set; } = default!;
