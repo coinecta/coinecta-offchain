@@ -34,6 +34,6 @@ public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory)
 
         await dbContext.SaveChangesAsync();
 
-        return Results.Ok();
+        return Results.Ok(utxoByAddresses);
     }
 }
