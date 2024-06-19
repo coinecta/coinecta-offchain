@@ -28,7 +28,7 @@ public class UtxosByAddressReducer(
         _dbContext = dbContextFactory.CreateDbContext();
 
         List<UtxoByAddress> trackedUtxosByAddress = await _dbContext.UtxosByAddress
-            .Where(x => DateTimeOffset.UtcNow.CompareTo(x.LastRequested.ToUniversalTime()) <= 0)
+            .Where(x => DateTimeOffset.UtcNow <= x.LastRequested)
             .ToListAsync();
 
         // Process by batches
