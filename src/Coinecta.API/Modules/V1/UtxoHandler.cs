@@ -4,24 +4,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Coinecta.API.Modules.V1;
 
-public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory)
+public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory, IConfiguration configuration)
 {
     public async Task<IResult> UpdateUtxoTrackerAsync(List<string> addresses)
     {
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
         IEnumerable<UtxoByAddress>? utxoByAddresses = await dbContext.UtxosByAddress.Where(x => addresses.Contains(x.Address)).ToListAsync();
 
+        int expirationMilliseconds = configuration.GetValue<int>("UtxosByAddressExpirationMillisecond");
         addresses.ToList().ForEach(address =>
         {
             UtxoByAddress? utxoByAddress = utxoByAddresses.FirstOrDefault(x => x.Address == address);
-            DateTimeOffset currentTime = DateTimeOffset.UtcNow;
+            DateTimeOffset expirationTime = DateTimeOffset.UtcNow.AddMilliseconds(expirationMilliseconds);
+
             if (utxoByAddress is null)
             {
                 UtxoByAddress newUtxosByAddress = new()
                 {
                     Address = address,
                     LastUpdated = DateTimeOffset.MinValue,
-                    LastRequested = currentTime,
+                    LastRequested = expirationTime,
                     UtxoListCbor = []
                 };
 
@@ -29,7 +31,7 @@ public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory)
             }
             else
             {
-                utxoByAddress.LastRequested = DateTimeOffset.UtcNow;
+                utxoByAddress.LastRequested = expirationTime;
             }
         });
 
