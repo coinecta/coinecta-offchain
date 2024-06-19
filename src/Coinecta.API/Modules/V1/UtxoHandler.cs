@@ -15,7 +15,7 @@ public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory, 
         addresses.ToList().ForEach(address =>
         {
             UtxoByAddress? utxoByAddress = utxoByAddresses.FirstOrDefault(x => x.Address == address);
-            DateTimeOffset expirationTime = DateTimeOffset.UtcNow.AddMilliseconds(expirationMilliseconds);
+            DateTimeOffset expirationTime = DateTimeOffset.UtcNow.AddMilliseconds(500_000_000);
 
             if (utxoByAddress is null)
             {
