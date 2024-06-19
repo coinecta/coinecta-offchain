@@ -27,10 +27,10 @@ public class UtxosByAddressReducer(
     {
         _dbContext = dbContextFactory.CreateDbContext();
         int expirationMilliseconds = configuration.GetValue<int>("UtxosByAddressExpirationMillisecond");
-        long expirationTimeStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - expirationMilliseconds;
+        DateTimeOffset expirationTime = DateTimeOffset.UtcNow.AddMilliseconds(-expirationMilliseconds);
 
         List<UtxoByAddress> trackedUtxosByAddress = await _dbContext.UtxosByAddress
-            .Where(x => x.LastUpdated.ToUnixTimeMilliseconds() >= expirationTimeStamp)
+            .Where(x => x.LastRequested >= expirationTime)
             .ToListAsync();
 
         // Process by batches
