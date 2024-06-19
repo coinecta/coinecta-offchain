@@ -193,10 +193,10 @@ namespace Coinecta.Data.Migrations
                     b.Property<string>("Address")
                         .HasColumnType("text");
 
-                    b.Property<DateTime>("LastRequested")
+                    b.Property<DateTimeOffset>("LastRequested")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("LastUpdated")
+                    b.Property<DateTimeOffset>("LastUpdated")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<byte[]>("UtxoListCborBytes")

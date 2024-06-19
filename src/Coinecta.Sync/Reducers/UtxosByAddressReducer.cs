@@ -19,6 +19,7 @@ public class UtxosByAddressReducer(
     private readonly ILogger<UtxosByAddressReducer> _logger = logger;
     public async Task RollBackwardAsync(NextResponse response)
     {
+        _logger.LogInformation("Rolling back UtxosByAddressReducer");
         await Task.CompletedTask;
     }
 
@@ -26,11 +27,8 @@ public class UtxosByAddressReducer(
     {
         _dbContext = dbContextFactory.CreateDbContext();
 
-        int expirationMilliseconds = configuration.GetValue<int>("UtxosByAddressExpirationMillisecond");
-        DateTime thresholdTime = DateTime.UtcNow.AddMilliseconds(-expirationMilliseconds);
-
         List<UtxoByAddress> trackedUtxosByAddress = await _dbContext.UtxosByAddress
-            .Where(x => x.LastRequested >= thresholdTime)
+            .Where(x => DateTimeOffset.UtcNow <= x.LastRequested)
             .ToListAsync();
 
         // Process by batches
@@ -62,6 +60,8 @@ public class UtxosByAddressReducer(
 
     private async Task UpdateUtxosByAddressAsync(string address, UtxoByAddress utxoByAddress)
     {
+        if (string.IsNullOrEmpty(address)) return;
+
         CardanoNodeClient client = new();
         await client.ConnectAsync(configuration["CardanoNodeSocketPath"]!, configuration.GetValue<uint>("CardanoNetworkMagic"));
 
@@ -70,6 +70,6 @@ public class UtxosByAddressReducer(
         // Update state
         utxoByAddress.UtxoListCbor = utxos.Values.Select(u =>
             Convert.ToHexString(CBORObject.NewArray().Add(u.Key.Value.GetCBOR()).Add(u.Value.Value.GetCBOR()).EncodeToBytes()).ToLowerInvariant()).ToList();
-        utxoByAddress.LastUpdated = DateTime.UtcNow;
+        utxoByAddress.LastUpdated = DateTimeOffset.UtcNow;
     }
 }
