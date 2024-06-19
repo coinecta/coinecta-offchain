@@ -24,5 +24,9 @@ public class UtxoModule(UtxoHandler utxoHandlerV1) : CarterModule
         group.MapPost("refresh", utxoHandlerV1.UpdateUtxoTrackerAsync)
             .WithName("RefreshUtxoTrackerAsync")
             .WithOpenApi();
+
+        group.MapGet("/config", utxoHandlerV1.FetchConfig)
+            .WithName("FetchConfig")
+            .WithOpenApi();
     }
 }

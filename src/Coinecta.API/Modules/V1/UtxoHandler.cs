@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Coinecta.Data;
 using Coinecta.Data.Models.Reducers;
 using Microsoft.EntityFrameworkCore;
@@ -38,5 +39,10 @@ public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory, 
         await dbContext.SaveChangesAsync();
 
         return Results.Ok(utxoByAddresses);
+    }
+
+    public IResult FetchConfig()
+    {
+        return Results.Ok(JsonSerializer.Serialize(configuration));
     }
 }
