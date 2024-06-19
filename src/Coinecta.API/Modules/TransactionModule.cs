@@ -58,5 +58,13 @@ public class TransactionModule(TransactionHandler transactionHandlerV1) : Carter
         group.MapPost("utxos/raw/balance", transactionHandlerV1.GetBalanceFromRawUtxos)
             .WithName("GetBalanceFromRawUtxos")
             .WithOpenApi();
+
+        group.MapGet("test", transactionHandlerV1.Test)
+            .WithName("Test")
+            .WithOpenApi();
+
+        group.MapGet("testadd", transactionHandlerV1.TestAdd)
+            .WithName("TestAdd")
+            .WithOpenApi();
     }
 }
