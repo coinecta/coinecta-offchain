@@ -22,8 +22,6 @@ builder.Services.AddCardanoIndexer<CoinectaDbContext>(builder.Configuration, 60)
 
 var app = builder.Build();
 
-app.MapGet("/", () => DateTimeOffset.UtcNow);
-
 using var scope = app.Services.CreateScope();
 var dbContext = scope.ServiceProvider.GetRequiredService<CoinectaDbContext>();
 dbContext.Database.Migrate();

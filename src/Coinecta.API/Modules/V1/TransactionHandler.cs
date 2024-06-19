@@ -188,14 +188,4 @@ public class TransactionHandler(
 
         return Results.Ok(balance);
     }
-
-    public IResult Test()
-    {
-        return Results.Ok(DateTimeOffset.UtcNow);
-    }
-
-    public IResult TestAdd()
-    {
-        return Results.Ok(DateTimeOffset.UtcNow.AddMilliseconds(300_000));
-    }
 }
