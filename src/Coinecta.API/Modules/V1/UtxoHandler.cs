@@ -43,6 +43,6 @@ public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory, 
 
     public IResult FetchConfig()
     {
-        return Results.Ok(JsonSerializer.Serialize(configuration));
+        return Results.Ok(configuration.AsEnumerable());
     }
 }
