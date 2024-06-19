@@ -11,7 +11,7 @@ public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory, 
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
         IEnumerable<UtxoByAddress>? utxoByAddresses = await dbContext.UtxosByAddress.Where(x => addresses.Contains(x.Address)).ToListAsync();
 
-        int expirationMilliseconds = configuration.GetValue<int>("UtxosByAddressExpirationMillisecond");
+        int expirationMilliseconds = int.Parse(configuration["UtxosByAddressExpirationMillisecond"] ?? "300000");
         addresses.ToList().ForEach(address =>
         {
             UtxoByAddress? utxoByAddress = utxoByAddresses.FirstOrDefault(x => x.Address == address);
