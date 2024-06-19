@@ -40,9 +40,4 @@ public class UtxoHandler(IDbContextFactory<CoinectaDbContext> dbContextFactory, 
 
         return Results.Ok(utxoByAddresses);
     }
-
-    public IResult FetchConfig()
-    {
-        return Results.Ok(configuration.AsEnumerable());
-    }
 }
