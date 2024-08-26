@@ -9,8 +9,8 @@
   <ItemGroup>
     <PackageReference Include="CborSerializer" Version="1.0.10" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.0" />
-    <PackageReference Include="SAIB.Cardano.Sync" Version="0.2.20-alpha" />
-    <PackageReference Include="SAIB.CardanoSharp.Wallet" Version="7.1.1" />
+    <PackageReference Include="SAIB.Cardano.Sync" Version="0.2.33-alpha" />
+    <PackageReference Include="SAIB.CardanoSharp.Wallet" Version="7.3.4" />
   </ItemGroup>
 
   <ItemGroup>

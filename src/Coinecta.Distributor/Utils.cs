@@ -102,7 +102,7 @@ public static class Utils
         {
             try
             {
-                CoinSelection result = coinSelectionService.GetCoinSelection(outputs, utxos, changeAddress, mint, requiredUtxos, limit, feeBuffer);
+                CoinSelection result = coinSelectionService.GetCoinSelection(outputs.ToList(), utxos.ToList(), changeAddress, mint, null, requiredUtxos, limit, feeBuffer);
                 return result;
             }
             catch (Exception)

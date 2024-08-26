@@ -204,7 +204,7 @@ public static class CoinectaUtils
             try
             {
                 CoinSelection result = coinSelectionService
-                    .GetCoinSelection(outputs, utxos, changeAddress, mint, requiredUtxos, limit, feeBuffer);
+                    .GetCoinSelection(outputs.ToList(), utxos.ToList(), changeAddress, mint, null, requiredUtxos, limit, feeBuffer);
 
                 return result;
             }
