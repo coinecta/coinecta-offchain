@@ -16,7 +16,6 @@ using CardanoSharp.Wallet.CIPs.CIP2.ChangeCreationStrategies;
 using System.Numerics;
 using Coinecta.Data.Models;
 using Microsoft.Extensions.Configuration;
-using UtxoByAddress = Coinecta.Data.Models.Reducers.UtxoByAddress;
 using CardanoSharp.Wallet.Common;
 using CardanoSharp.Wallet.CIPs.CIP2.Extensions;
 
@@ -204,7 +203,14 @@ public static class CoinectaUtils
             try
             {
                 CoinSelection result = coinSelectionService
-                    .GetCoinSelection(outputs, utxos, changeAddress, mint, requiredUtxos, limit, feeBuffer);
+                    .GetCoinSelection(
+                        outputs.ToList(),
+                        utxos.ToList(), changeAddress,
+                        mint,
+                        null,
+                        requiredUtxos,
+                        limit,
+                        feeBuffer);
 
                 return result;
             }
