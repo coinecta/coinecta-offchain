@@ -13,7 +13,7 @@ public record StakePositionByStakeKey
     public ulong Slot { get; init; }
     public string TxHash { get; init; } = default!;
     public ulong TxIndex { get; init; }
-    public Value Amount { get; init; } = default!;
+    public Cardano.Sync.Data.Models.Value Amount { get; init; } = default!;
     public ulong LockTime { get; init; }
     public UtxoStatus UtxoStatus { get; set; } = UtxoStatus.Unspent;
     public Rational Interest { get; init; } = default!;
