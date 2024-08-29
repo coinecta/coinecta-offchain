@@ -14,4 +14,8 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Coinecta.Data\Coinecta.Data.csproj" />
+  </ItemGroup>
+
 </Project>
