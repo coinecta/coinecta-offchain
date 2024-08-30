@@ -20,4 +20,47 @@ public static class MultiAssetExtension
                 )
             }
         );
+
+    public static Dictionary<string, Dictionary<string, ulong>> Subtract(
+        this Dictionary<string, Dictionary<string, ulong>> self,
+        Dictionary<string, Dictionary<string, ulong>> other
+    )
+    {
+        foreach (var outerKey in other.Keys)
+        {
+            if (self.TryGetValue(outerKey, out Dictionary<string, ulong>? value))
+            {
+                foreach (var innerKey in other[outerKey].Keys)
+                {
+                    if (value.TryGetValue(innerKey, out ulong innerValue))
+                    {
+                        // Subtract the value
+                        ulong valueToSubtract = other[outerKey][innerKey];
+                        if (innerValue >= valueToSubtract)
+                        {
+                            value[innerKey] -= valueToSubtract;
+                        }
+                        else
+                        {
+                            value[innerKey] = 0;
+                        }
+
+                        // Remove the inner key if the value is zero
+                        if (value[innerKey] == 0)
+                        {
+                            value.Remove(innerKey);
+                        }
+                    }
+                }
+
+                // Remove the outer key if there are no more inner keys
+                if (value.Count == 0)
+                {
+                    self.Remove(outerKey);
+                }
+            }
+        }
+
+        return self;
+    }
 }

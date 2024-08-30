@@ -12,6 +12,7 @@ using CardanoSharp.Wallet.Extensions.Models;
 using CardanoSharp.Wallet.Enums;
 using PeterO.Cbor2;
 using CardanoSharp.Wallet.Utilities;
+using CardanoSharp.Wallet.Extensions;
 
 namespace Coinecta.API.Modules.V1;
 
@@ -24,6 +25,7 @@ public class TransactionHandler(IConfiguration configuration)
     }
 
     // @TODO: NFT identifier minting
+    // Generate seed for minting
     public string CreateTreasury(CreateTreasuryRequest request)
     {
         Address ownerAddr = new(request.OwnerAddress);
@@ -186,6 +188,7 @@ public class TransactionHandler(IConfiguration configuration)
         // Prepare needed data
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
+        IEnumerable<Utxo> utxos = TransactionUtils.DeserializeUtxoCborHex(request.RawUtxos);
         Utxo collateralUtxo = TransactionUtils.DeserializeUtxoCborHex([request.RawCollateralUtxo]).First();
         TransactionInput treasuryValidatorReferenceInput = CoinectaUtils.GetTreasuryReferenceInput(configuration);
 
@@ -229,6 +232,13 @@ public class TransactionHandler(IConfiguration configuration)
             }
         } : null;
 
+        // Make sure the min utxo is met, in case user is claiming low ADA or non-ADA asset
+        if (directClaimOutput is not null)
+        {
+            ulong minUtxoLovelace = directClaimOutput.CalculateMinUtxoLovelace();
+            directClaimOutput.Value.Coin = Math.Max(directClaimOutput.Value.Coin, minUtxoLovelace);
+        }
+
         // @TODO: Vested claim output
         // For now this is not needed so we skip this part
 
@@ -237,20 +247,91 @@ public class TransactionHandler(IConfiguration configuration)
         // @TODO: Deduct both direct and vested values
         TransactionOutputValue treasuryReturnOutputValue = new()
         {
-            Coin = request.LockedValue.Coin,
-            MultiAsset = request.LockedValue.MultiAsset.ToNativeAsset()
+            Coin = request.LockedValue.Coin - (request.DirectClaimValue?.Coin ?? 0),
+            MultiAsset = request.LockedValue.MultiAsset
+                .Subtract(request.DirectClaimValue?.MultiAsset ?? [])
+                .ToNativeAsset()
         };
 
         TransactionOutput? treasuryReturnOutput = new()
         {
             Address = treasuryAddr.GetBytes(),
-            Value = lockedTreasuryOutputValue,
+            Value = treasuryReturnOutputValue,
             DatumOption = new()
             {
                 RawData = Convert.FromHexString(request.ReturnDatum)
             }
         };
 
-        return string.Empty;
+        // Build Transaction Body
+        ITransactionBodyBuilder txBodyBuilder = TransactionBodyBuilder.Create;
+        // Inputs
+        txBodyBuilder.AddInput(lockedTreasuryInput);
+
+        // Add return output if any
+        if (treasuryReturnOutputValue.Coin > 0)
+            txBodyBuilder.AddOutput(treasuryReturnOutput);
+
+        // Add direct claim output if any
+        // @TODO: handle where to get fees when there's no direct claim
+        // or if there's no ADA to claim
+
+        // Add change output
+        if (directClaimOutput is not null)
+            txBodyBuilder.AddOutput(directClaimOutput);
+
+        // Reference Script Inputs
+        txBodyBuilder.AddReferenceInput(treasuryValidatorReferenceInput);
+
+        // Collateral Input
+        txBodyBuilder.AddCollateralInput(new()
+        {
+            TransactionId = Convert.FromHexString(collateralUtxo.TxHash),
+            TransactionIndex = collateralUtxo.TxIndex
+        });
+
+        // Validity Interval
+        NetworkType network = NetworkUtils.GetNetworkType(configuration);
+        long currentSlot = SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
+        txBodyBuilder.SetValidAfter((uint)currentSlot);
+        txBodyBuilder.SetValidBefore((uint)(currentSlot + 1000));
+
+        // Redeemers
+        List<TransactionInput> txInputs = [.. txBodyBuilder.Build().TransactionInputs];
+        List<string> txInputOutrefs = txInputs.Select(i => (Convert.ToHexString(i.TransactionId) + i.TransactionIndex).ToLower()).ToList();
+        txInputOutrefs.Sort();
+
+        uint redeemerIndex = (uint)txInputOutrefs.IndexOf(lockedTreasuryInput.TransactionId.ToStringHex().ToLowerInvariant() + lockedTreasuryInput.TransactionIndex);
+        RedeemerBuilder? claimRedeemer = RedeemerBuilder.Create
+            .SetTag(RedeemerTag.Spend)
+            .SetIndex(redeemerIndex)
+            .SetPlutusData(CBORObject.DecodeFromBytes(Convert.FromHexString(request.Redeemer)).GetPlutusData()) as RedeemerBuilder;
+
+        txBodyBuilder.SetScriptDataHash([claimRedeemer!.Build()], [], CostModelUtility.PlutusV2CostModel.Serialize());
+
+        // Witness set
+        ITransactionWitnessSetBuilder txWitnessSetBuilder = TransactionWitnessSetBuilder.Create;
+        txWitnessSetBuilder.AddRedeemer(claimRedeemer);
+
+        // Required Signers
+        txBodyBuilder.AddRequiredSigner(ownerAddr.GetPublicKeyHash());
+
+        // Build Transaction
+        ITransactionBuilder txBuilder = TransactionBuilder.Create;
+        txBuilder.SetBody(txBodyBuilder);
+        txBuilder.SetWitnesses(txWitnessSetBuilder);
+
+        try
+        {
+            Transaction tx = txBuilder.BuildAndSetExUnits(network);
+            uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
+            tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
+
+            return Convert.ToHexString(tx.Serialize());
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Error building transaction: {ex.Message}. Please contact support for assistance.");
+        }
     }
 }

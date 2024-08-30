@@ -31,6 +31,11 @@ public class TransactionModule(TransactionHandler transactionHandlerV1) : Carter
             .WithName("TreasuryWithdraw")
             .WithDescription("Owner unlocks a UTxO from the treasury validator");
 
+        group.MapPost("/treasury/claim", transactionHandlerV1.TreasuryClaim)
+            .MapToApiVersion(1)
+            .WithName("TreasuryClaim")
+            .WithDescription("Member claims direct/vested funds from the treasury");
+
         group.MapPost("/finalize", transactionHandlerV1.Finalize)
             .MapToApiVersion(1)
             .WithName("FinalizeTransaction")

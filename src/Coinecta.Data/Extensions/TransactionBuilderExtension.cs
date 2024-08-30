@@ -1,5 +1,6 @@
 using CardanoSharp.Wallet.Enums;
 using CardanoSharp.Wallet.Extensions.Models;
+using CardanoSharp.Wallet.Extensions.Models.Transactions;
 using CardanoSharp.Wallet.Models.Transactions;
 using CardanoSharp.Wallet.Models.Transactions.TransactionWitness.PlutusScripts;
 using CardanoSharp.Wallet.TransactionBuilding;
@@ -12,6 +13,8 @@ public static class TransactionBuilderExtension
     public static Transaction BuildAndSetExUnits(this ITransactionBuilder builder, NetworkType networkType, List<IPlutusData>? datums = null)
     {
         Transaction tx = builder.Build();
+
+        Console.WriteLine(Convert.ToHexString(tx.Serialize()));
 
         CsBindgen.TransactionEvaluation txEvalResults = CsBindgen.UPLCMethods.GetExUnits(tx, networkType);
 
