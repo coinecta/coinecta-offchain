@@ -14,8 +14,6 @@ public static class TransactionBuilderExtension
     {
         Transaction tx = builder.Build();
 
-        Console.WriteLine(Convert.ToHexString(tx.Serialize()));
-
         CsBindgen.TransactionEvaluation txEvalResults = CsBindgen.UPLCMethods.GetExUnits(tx, networkType);
 
         if (txEvalResults.Error != null)

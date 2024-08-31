@@ -17,7 +17,7 @@ public static class TransactionExtension
         if (self.TransactionWitnessSet is null)
             self.TransactionWitnessSet = witnessSetBuilder.Build();
         else
-            self.TransactionWitnessSet.VKeyWitnesses = witnessSet.VKeyWitnesses;
+            witnessSet.VKeyWitnesses.ToList().ForEach(self.TransactionWitnessSet.VKeyWitnesses.Add);
 
         byte[] serializedSignedTx = self.Serialize();
         int maxTransactionSize = 16 * 1024; // 16KB

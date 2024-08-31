@@ -13,6 +13,11 @@ using CardanoSharp.Wallet.Enums;
 using PeterO.Cbor2;
 using CardanoSharp.Wallet.Utilities;
 using CardanoSharp.Wallet.Extensions;
+using CardanoSharp.Wallet.Models.Transactions.TransactionWitness;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using CardanoSharp.Wallet.Models.Keys;
 
 namespace Coinecta.API.Modules.V1;
 
@@ -31,15 +36,32 @@ public class TransactionHandler(IConfiguration configuration)
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
         IEnumerable<Utxo> utxos = TransactionUtils.DeserializeUtxoCborHex(request.RawUtxos);
+        var treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
+        byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
+        string treasuryIdMintingPolicy = Convert.ToHexString(treasuryIdMintingPolicyBytes).ToLowerInvariant();
+        (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
 
         // Build treasury output
+        byte[] idBytes = SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request)));
+        string idHex = Convert.ToHexString(idBytes).ToLowerInvariant();
+
+        ITokenBundleBuilder idAssetBundleBuilder = TokenBundleBuilder.Create;
+        idAssetBundleBuilder.AddToken(treasuryIdMintingPolicyBytes, Convert.FromHexString(idHex[..32]), 1);
+
+        Dictionary<string, ulong> idAsset = new(){
+            {idHex[..32], 1}
+        };
+
+        Dictionary<string, Dictionary<string, ulong>> updatedTreasuryOutputAsset = request.Amount.MultiAsset;
+        updatedTreasuryOutputAsset.Add(treasuryIdMintingPolicy, idAsset);
+
         TransactionOutput treasuryOutput = new()
         {
             Address = treasuryAddr.GetBytes(),
             Value = new()
             {
                 Coin = request.Amount.Coin,
-                MultiAsset = request.Amount.MultiAsset.ToNativeAsset()
+                MultiAsset = updatedTreasuryOutputAsset.ToNativeAsset()
             },
             DatumOption = new()
             {
@@ -54,7 +76,7 @@ public class TransactionHandler(IConfiguration configuration)
             [treasuryOutput],
             utxos,
             request.OwnerAddress,
-            null,
+            idAssetBundleBuilder,
             null,
             null
         );
@@ -66,10 +88,21 @@ public class TransactionHandler(IConfiguration configuration)
         txBodyBuilder.AddOutput(treasuryOutput);
         changeOutputCoinSelection.ChangeOutputs.ForEach(output => txBodyBuilder.AddOutput(output));
 
+        // Mint
+        txBodyBuilder.SetMint(idAssetBundleBuilder);
+
+        // Required Signers
+        // txBodyBuilder.AddRequiredSigner(treasuryIdMintingWalletAddr.GetPublicKeyHash());
+
+        // Witness set
+        ITransactionWitnessSetBuilder txWitnessSetBuilder = TransactionWitnessSetBuilder.Create;
+        txWitnessSetBuilder.AddNativeScript(treasuryIdMintingScript);
+        txWitnessSetBuilder.AddVKeyWitness(vkey, skey);
+
         // Build the transaction
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
         txBuilder.SetBody(txBodyBuilder);
-        txBuilder.SetWitnesses(TransactionWitnessSetBuilder.Create);
+        txBuilder.SetWitnesses(txWitnessSetBuilder);
 
         try
         {
@@ -293,7 +326,7 @@ public class TransactionHandler(IConfiguration configuration)
         // Validity Interval
         NetworkType network = NetworkUtils.GetNetworkType(configuration);
         long currentSlot = SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
-        txBodyBuilder.SetValidAfter((uint)currentSlot);
+        txBodyBuilder.SetValidAfter((uint)currentSlot - 100);
         txBodyBuilder.SetValidBefore((uint)(currentSlot + 1000));
 
         // Redeemers
