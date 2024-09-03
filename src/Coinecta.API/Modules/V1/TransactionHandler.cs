@@ -13,11 +13,15 @@ using CardanoSharp.Wallet.Enums;
 using PeterO.Cbor2;
 using CardanoSharp.Wallet.Utilities;
 using CardanoSharp.Wallet.Extensions;
-using CardanoSharp.Wallet.Models.Transactions.TransactionWitness;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CardanoSharp.Wallet.Models.Keys;
+using Chrysalis.Cardano.Models;
+using Chrysalis.Cbor;
+using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
+using TransactionInput = CardanoSharp.Wallet.Models.Transactions.TransactionInput;
+using Chrysalis.Utils;
 
 namespace Coinecta.API.Modules.V1;
 
@@ -29,8 +33,6 @@ public class TransactionHandler(IConfiguration configuration)
         return tx.Sign(request.TxWitnessCbor);
     }
 
-    // @TODO: NFT identifier minting
-    // Generate seed for minting
     public string CreateTreasury(CreateTreasuryRequest request)
     {
         Address ownerAddr = new(request.OwnerAddress);
@@ -55,6 +57,12 @@ public class TransactionHandler(IConfiguration configuration)
         Dictionary<string, Dictionary<string, ulong>> updatedTreasuryOutputAsset = request.Amount.MultiAsset;
         updatedTreasuryOutputAsset.Add(treasuryIdMintingPolicy, idAsset);
 
+        TreasuryDatum datum = new(
+            new Signature(new(ownerAddr.GetPublicKeyHash())),
+            new(Convert.FromHexString(request.TreasuryRootHash)),
+            new(request.UnlockTime)
+        );
+
         TransactionOutput treasuryOutput = new()
         {
             Address = treasuryAddr.GetBytes(),
@@ -65,7 +73,7 @@ public class TransactionHandler(IConfiguration configuration)
             },
             DatumOption = new()
             {
-                RawData = Convert.FromHexString(request.Datum)
+                RawData = CborSerializer.Serialize((ICbor)datum)
             }
         };
 
@@ -90,9 +98,6 @@ public class TransactionHandler(IConfiguration configuration)
 
         // Mint
         txBodyBuilder.SetMint(idAssetBundleBuilder);
-
-        // Required Signers
-        // txBodyBuilder.AddRequiredSigner(treasuryIdMintingWalletAddr.GetPublicKeyHash());
 
         // Witness set
         ITransactionWitnessSetBuilder txWitnessSetBuilder = TransactionWitnessSetBuilder.Create;
@@ -126,6 +131,20 @@ public class TransactionHandler(IConfiguration configuration)
         Utxo collateralUtxo = TransactionUtils.DeserializeUtxoCborHex([request.RawCollateralUtxo]).First();
         TransactionInput treasuryValidatorReferenceInput = CoinectaUtils.GetTreasuryReferenceInput(configuration);
 
+        // @TODO: Use datum from database once it's available
+        // in the meantime, we temporarily pass the datum in the request body
+        TreasuryDatum datum = CborSerializer.Deserialize<TreasuryDatum>(Convert.FromHexString(request.Datum)) ?? throw new Exception("Invalid datum");
+        byte[] treasuryOwnerPkh = datum.Owner switch
+        {
+            Signature sig => sig.KeyHash.Value,
+            _ => throw new Exception("Only signature is currently supported")
+        };
+
+        // Redeemer
+        TreasuryWithdrawRedeemer redeemer = new();
+
+        // @TODO: Use value from database when available
+        // in the meantime, we temporarily pass the value in the request body
         // Rebuild locked UTxO input with value
         TransactionOutputValue lockedTreasuryOutputValue = new()
         {
@@ -139,7 +158,7 @@ public class TransactionHandler(IConfiguration configuration)
             Value = lockedTreasuryOutputValue,
             DatumOption = new()
             {
-                RawData = Convert.FromHexString(request.Datum)
+                RawData = CborSerializer.Serialize(datum)
             }
         };
 
@@ -180,7 +199,7 @@ public class TransactionHandler(IConfiguration configuration)
         RedeemerBuilder? withdrawRedeemerBuilder = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Spend)
             .SetIndex(0)
-            .SetPlutusData(CBORObject.DecodeFromBytes(Convert.FromHexString(request.Redeemer)).GetPlutusData()) as RedeemerBuilder;
+            .SetPlutusData(CBORObject.DecodeFromBytes(CborSerializer.Serialize(redeemer)).GetPlutusData()) as RedeemerBuilder;
 
         txBodyBuilder.SetScriptDataHash([withdrawRedeemerBuilder!.Build()], [], CostModelUtility.PlutusV2CostModel.Serialize());
 
@@ -189,7 +208,7 @@ public class TransactionHandler(IConfiguration configuration)
         txWitnessSetBuilder.AddRedeemer(withdrawRedeemerBuilder);
 
         // Required Signers
-        txBodyBuilder.AddRequiredSigner(ownerAddr.GetPublicKeyHash());
+        txBodyBuilder.AddRequiredSigner(treasuryOwnerPkh);
 
         // Validity Interval
         NetworkType network = NetworkUtils.GetNetworkType(configuration);
@@ -273,16 +292,14 @@ public class TransactionHandler(IConfiguration configuration)
         }
 
         // @TODO: Vested claim output
-        // For now this is not needed so we skip this part
 
         // Build the treasury return output
-
-        // @TODO: Deduct both direct and vested values
         TransactionOutputValue treasuryReturnOutputValue = new()
         {
-            Coin = request.LockedValue.Coin - (request.DirectClaimValue?.Coin ?? 0),
+            Coin = request.LockedValue.Coin - (request.DirectClaimValue?.Coin ?? 0) - (request.VestedClaimValue?.Coin ?? 0),
             MultiAsset = request.LockedValue.MultiAsset
                 .Subtract(request.DirectClaimValue?.MultiAsset ?? [])
+                .Subtract(request.VestedClaimValue?.MultiAsset ?? [])
                 .ToNativeAsset()
         };
 

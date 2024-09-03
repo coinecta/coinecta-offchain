@@ -6,7 +6,6 @@ public record TreasuryWithdrawRequest(
     OutputReference SpendOutRef,
     Value LockedValue,
     string OwnerAddress,
-    string Redeemer,
     string Datum,
     string RawCollateralUtxo
 );
