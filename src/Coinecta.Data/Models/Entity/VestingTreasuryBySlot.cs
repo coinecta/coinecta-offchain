@@ -1,5 +1,6 @@
 using Cardano.Sync.Data.Models;
 using Chrysalis.Cbor;
+using Coinecta.Data.Models.Datums;
 
 namespace Coinecta.Data.Models.Entity;
 

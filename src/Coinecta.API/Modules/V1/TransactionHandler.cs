@@ -21,10 +21,10 @@ using Chrysalis.Cardano.Models;
 using Chrysalis.Cbor;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 using TransactionInput = CardanoSharp.Wallet.Models.Transactions.TransactionInput;
-using Chrysalis.Utils;
 using Microsoft.EntityFrameworkCore;
 using Coinecta.Data.Models.Entity;
 using Cardano.Sync.Data.Models;
+using Coinecta.Data.Models.Datums;
 
 namespace Coinecta.API.Modules.V1;
 

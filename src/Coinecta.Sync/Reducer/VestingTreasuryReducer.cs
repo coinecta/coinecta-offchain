@@ -8,6 +8,7 @@ using CardanoSharp.Wallet.Extensions.Models;
 using Coinecta.Data.Models.Entity;
 using Chrysalis.Cbor;
 using Coinecta.Data.Extensions;
+using Coinecta.Data.Models.Datums;
 
 namespace Coinecta.Sync.Reducer;
 
@@ -176,7 +177,6 @@ public class VestingTreasuryReducer(
 
                  // Check if there is a datum, otherwise ignore
                  if (output.Datum is null || output.Datum.Data is null) return;
-
                  try
                  {
                      // Check if datum is correct shape
