@@ -1,0 +1,6 @@
+@Coinecta.Sync_HostAddress = http://localhost:5118
+
+GET {{Coinecta.Sync_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

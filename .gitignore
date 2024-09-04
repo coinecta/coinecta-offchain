@@ -1,6 +1,6 @@
 **/appsettings.json
 **/appsettings.*.json
-**/bin
-**/obj
+**/bin/
+**/obj/
 .mono
 *.csv

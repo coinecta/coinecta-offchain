@@ -1,6 +1,8 @@
 using Asp.Versioning;
 using Carter;
 using Coinecta.API.Modules.V1;
+using Coinecta.Data.Models;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
@@ -21,6 +23,22 @@ builder.Services.AddApiVersioning(options =>
 {
     options.GroupNameFormat = "'v'V";
     options.SubstituteApiVersionInUrl = true;
+});
+
+builder.Services.AddDbContextFactory<CoinectaDbContext>(options =>
+{
+    options
+    .UseNpgsql(
+        builder.Configuration
+        .GetConnectionString("CardanoContext"),
+            x =>
+            {
+                x.MigrationsHistoryTable(
+                    "__EFMigrationsHistory",
+                    builder.Configuration.GetConnectionString("CardanoContextSchema")
+                );
+            }
+        );
 });
 
 var app = builder.Build();

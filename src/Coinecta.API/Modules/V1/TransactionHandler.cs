@@ -22,10 +22,16 @@ using Chrysalis.Cbor;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 using TransactionInput = CardanoSharp.Wallet.Models.Transactions.TransactionInput;
 using Chrysalis.Utils;
+using Microsoft.EntityFrameworkCore;
+using Coinecta.Data.Models.Entity;
+using Cardano.Sync.Data.Models;
 
 namespace Coinecta.API.Modules.V1;
 
-public class TransactionHandler(IConfiguration configuration)
+public class TransactionHandler(
+    IDbContextFactory<CoinectaDbContext> dbContextFactory,
+    IConfiguration configuration
+)
 {
     public string Finalize(FinalizeTransactionRequest request)
     {
@@ -38,7 +44,7 @@ public class TransactionHandler(IConfiguration configuration)
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
         IEnumerable<Utxo> utxos = TransactionUtils.DeserializeUtxoCborHex(request.RawUtxos);
-        var treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
+        INativeScriptBuilder treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
         byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
         string treasuryIdMintingPolicy = Convert.ToHexString(treasuryIdMintingPolicyBytes).ToLowerInvariant();
         (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
@@ -123,17 +129,25 @@ public class TransactionHandler(IConfiguration configuration)
         }
     }
 
-    public string TreasuryWithdraw(TreasuryWithdrawRequest request)
+    public async Task<string> TreasuryWithdrawAsync(TreasuryWithdrawRequest request)
     {
         // Prepare needed data
+        using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
+        string spendOutRef = request.SpendOutRef.TxHash.ToLowerInvariant() + request.SpendOutRef.Index;
+        VestingTreasuryById vestingTreasuryById = await dbContext.VestingTreasuryById
+            .AsNoTracking()
+            .Where(vtbi => vtbi.TxHash + vtbi.TxIndex == spendOutRef)
+            .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
+        TreasuryDatum datum = vestingTreasuryById.TreasuryDatum!;
+        Value? lockedValue = vestingTreasuryById.Amount;
+
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
         Utxo collateralUtxo = TransactionUtils.DeserializeUtxoCborHex([request.RawCollateralUtxo]).First();
         TransactionInput treasuryValidatorReferenceInput = CoinectaUtils.GetTreasuryReferenceInput(configuration);
 
-        // @TODO: Use datum from database once it's available
         // in the meantime, we temporarily pass the datum in the request body
-        TreasuryDatum datum = CborSerializer.Deserialize<TreasuryDatum>(Convert.FromHexString(request.Datum)) ?? throw new Exception("Invalid datum");
         byte[] treasuryOwnerPkh = datum.Owner switch
         {
             Signature sig => sig.KeyHash.Value,
@@ -143,13 +157,12 @@ public class TransactionHandler(IConfiguration configuration)
         // Redeemer
         TreasuryWithdrawRedeemer redeemer = new();
 
-        // @TODO: Use value from database when available
         // in the meantime, we temporarily pass the value in the request body
         // Rebuild locked UTxO input with value
         TransactionOutputValue lockedTreasuryOutputValue = new()
         {
-            Coin = request.LockedValue.Coin,
-            MultiAsset = request.LockedValue.MultiAsset.ToNativeAsset()
+            Coin = lockedValue!.Coin,
+            MultiAsset = lockedValue.MultiAsset.ToNativeAsset()
         };
 
         TransactionOutput lockedTreasuryOutput = new()
@@ -235,20 +248,30 @@ public class TransactionHandler(IConfiguration configuration)
         }
     }
 
-    public string TreasuryClaim(TreasuryClaimRequest request)
+    public async Task<string> TreasuryClaimAsync(TreasuryClaimRequest request)
     {
-        // Prepare needed data
+        /// Prepare needed data
+        using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
         IEnumerable<Utxo> utxos = TransactionUtils.DeserializeUtxoCborHex(request.RawUtxos);
         Utxo collateralUtxo = TransactionUtils.DeserializeUtxoCborHex([request.RawCollateralUtxo]).First();
         TransactionInput treasuryValidatorReferenceInput = CoinectaUtils.GetTreasuryReferenceInput(configuration);
 
+        string spendOutRef = request.SpendOutRef.TxHash.ToLowerInvariant() + request.SpendOutRef.Index;
+        VestingTreasuryById vestingTreasuryById = await dbContext.VestingTreasuryById
+            .AsNoTracking()
+            .Where(vtbi => vtbi.TxHash + vtbi.TxIndex == spendOutRef)
+            .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
+        TreasuryDatum datum = vestingTreasuryById.TreasuryDatum!;
+        Value? lockedValue = vestingTreasuryById.Amount;
+
         // Rebuild locked UTxO input with value
         TransactionOutputValue lockedTreasuryOutputValue = new()
         {
-            Coin = request.LockedValue.Coin,
-            MultiAsset = request.LockedValue.MultiAsset.ToNativeAsset()
+            Coin = lockedValue!.Coin,
+            MultiAsset = lockedValue.MultiAsset.ToNativeAsset()
         };
 
         TransactionOutput lockedTreasuryOutput = new()
@@ -257,7 +280,7 @@ public class TransactionHandler(IConfiguration configuration)
             Value = lockedTreasuryOutputValue,
             DatumOption = new()
             {
-                RawData = Convert.FromHexString(request.Datum)
+                RawData = vestingTreasuryById.Datum
             }
         };
 
@@ -296,8 +319,8 @@ public class TransactionHandler(IConfiguration configuration)
         // Build the treasury return output
         TransactionOutputValue treasuryReturnOutputValue = new()
         {
-            Coin = request.LockedValue.Coin - (request.DirectClaimValue?.Coin ?? 0) - (request.VestedClaimValue?.Coin ?? 0),
-            MultiAsset = request.LockedValue.MultiAsset
+            Coin = lockedValue.Coin - (request.DirectClaimValue?.Coin ?? 0) - (request.VestedClaimValue?.Coin ?? 0),
+            MultiAsset = lockedValue.MultiAsset
                 .Subtract(request.DirectClaimValue?.MultiAsset ?? [])
                 .Subtract(request.VestedClaimValue?.MultiAsset ?? [])
                 .ToNativeAsset()
