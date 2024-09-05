@@ -141,6 +141,10 @@ public class TransactionHandler(
             .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
         TreasuryDatum datum = vestingTreasuryById.TreasuryDatum!;
         Value? lockedValue = vestingTreasuryById.Amount;
+        (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
+        INativeScriptBuilder treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
+        byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
+        string treasuryIdMintingPolicy = Convert.ToHexString(treasuryIdMintingPolicyBytes).ToLowerInvariant();
 
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
@@ -157,12 +161,31 @@ public class TransactionHandler(
         // Redeemer
         TreasuryWithdrawRedeemer redeemer = new();
 
-        // in the meantime, we temporarily pass the value in the request body
-        // Rebuild locked UTxO input with value
+        // Burn asset
+        string assetName = lockedValue?.MultiAsset.GetValueOrDefault(treasuryIdMintingPolicy)?.Keys.First() ?? throw new Exception("Id asset not found");
+
+        ITokenBundleBuilder idAssetBurnTokenBundleBuilder = TokenBundleBuilder.Create;
+        idAssetBurnTokenBundleBuilder.AddToken(treasuryIdMintingPolicyBytes, Convert.FromHexString(assetName), -1);
+
+        Dictionary<string, Dictionary<string, ulong>> burnValue = new()
+        {
+            { treasuryIdMintingPolicy, new Dictionary<string, ulong>() {
+                { assetName, 1 }
+            }}
+        };
+
         TransactionOutputValue lockedTreasuryOutputValue = new()
         {
             Coin = lockedValue!.Coin,
             MultiAsset = lockedValue.MultiAsset.ToNativeAsset()
+        };
+
+        var test = lockedValue.MultiAsset.Subtract(burnValue);
+
+        TransactionOutputValue withdrawalOutputValue = new()
+        {
+            Coin = lockedValue!.Coin,
+            MultiAsset = lockedValue.MultiAsset.Subtract(burnValue).ToNativeAsset()
         };
 
         TransactionOutput lockedTreasuryOutput = new()
@@ -186,7 +209,7 @@ public class TransactionHandler(
         TransactionOutput withdrawalOutput = new()
         {
             Address = ownerAddr.GetBytes(),
-            Value = lockedTreasuryOutputValue
+            Value = withdrawalOutputValue
         };
 
         // Build Transaction Body
@@ -208,6 +231,9 @@ public class TransactionHandler(
             TransactionIndex = collateralUtxo.TxIndex
         });
 
+        // Burn
+        txBodyBuilder.SetMint(idAssetBurnTokenBundleBuilder);
+
         // Redeemers
         RedeemerBuilder? withdrawRedeemerBuilder = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Spend)
@@ -219,6 +245,8 @@ public class TransactionHandler(
         // WitnessSet
         ITransactionWitnessSetBuilder txWitnessSetBuilder = TransactionWitnessSetBuilder.Create;
         txWitnessSetBuilder.AddRedeemer(withdrawRedeemerBuilder);
+        txWitnessSetBuilder.AddNativeScript(treasuryIdMintingScript);
+        txWitnessSetBuilder.AddVKeyWitness(vkey, skey);
 
         // Required Signers
         txBodyBuilder.AddRequiredSigner(treasuryOwnerPkh);
@@ -258,6 +286,10 @@ public class TransactionHandler(
         IEnumerable<Utxo> utxos = TransactionUtils.DeserializeUtxoCborHex(request.RawUtxos);
         Utxo collateralUtxo = TransactionUtils.DeserializeUtxoCborHex([request.RawCollateralUtxo]).First();
         TransactionInput treasuryValidatorReferenceInput = CoinectaUtils.GetTreasuryReferenceInput(configuration);
+        (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
+        INativeScriptBuilder treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
+        byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
+        string treasuryIdMintingPolicy = Convert.ToHexString(treasuryIdMintingPolicyBytes).ToLowerInvariant();
 
         string spendOutRef = request.SpendOutRef.TxHash.ToLowerInvariant() + request.SpendOutRef.Index;
         VestingTreasuryById vestingTreasuryById = await dbContext.VestingTreasuryById
@@ -343,7 +375,19 @@ public class TransactionHandler(
 
         // Add return output if any
         if (treasuryReturnOutputValue.Coin > 0)
+        {
             txBodyBuilder.AddOutput(treasuryReturnOutput);
+        }
+        else
+        {
+            // If there is no output to return, then we burn the id token
+            string assetName = lockedValue?.MultiAsset.GetValueOrDefault(treasuryIdMintingPolicy)?.Keys.First() ?? throw new Exception("Id asset not found");
+            ITokenBundleBuilder idAssetBurnTokenBundleBuilder = TokenBundleBuilder.Create;
+            idAssetBurnTokenBundleBuilder.AddToken(treasuryIdMintingPolicyBytes, Convert.FromHexString(assetName), -1);
+
+            // Burn
+            txBodyBuilder.SetMint(idAssetBurnTokenBundleBuilder);
+        }
 
         // Add direct claim output if any
         // @TODO: handle where to get fees when there's no direct claim
@@ -385,6 +429,13 @@ public class TransactionHandler(
         // Witness set
         ITransactionWitnessSetBuilder txWitnessSetBuilder = TransactionWitnessSetBuilder.Create;
         txWitnessSetBuilder.AddRedeemer(claimRedeemer);
+
+        // Add id minting wallet signature if final claim
+        if (treasuryReturnOutputValue.Coin <= 0)
+        {
+            txWitnessSetBuilder.AddNativeScript(treasuryIdMintingScript);
+            txWitnessSetBuilder.AddVKeyWitness(vkey, skey);
+        }
 
         // Required Signers
         txBodyBuilder.AddRequiredSigner(ownerAddr.GetPublicKeyHash());
