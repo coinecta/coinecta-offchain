@@ -62,8 +62,7 @@ public class VestingTreasuryReducer(
             Slot = vtbs.Slot,
             TxHash = vtbs.TxHash,
             TxIndex = vtbs.TxIndex,
-            Datum = vtbs.Datum,
-            Amount = vtbs.Amount,
+            UtxoRaw = vtbs.UtxoRaw,
             OwnerPkh = vtbs.OwnerPkh
         });
 
@@ -149,12 +148,7 @@ public class VestingTreasuryReducer(
             Slot = vtbs.Slot,
             TxHash = vtbs.TxHash,
             TxIndex = vtbs.TxIndex,
-            Datum = vtbs.Datum,
-            Amount = new()
-            {
-                Coin = vtbs.Amount!.Coin,
-                MultiAsset = vtbs.Amount.MultiAsset
-            },
+            UtxoRaw = vtbs.UtxoRaw,
             OwnerPkh = vtbs.OwnerPkh
         });
 
@@ -280,8 +274,7 @@ public class VestingTreasuryReducer(
                          BlockHash = block.Hash.ToHex(),
                          TxHash = tx.Id.ToHex(),
                          TxIndex = (uint)output.Index,
-                         Datum = output.Datum.Data,
-                         Amount = output.Amount.ToValue(),
+                         UtxoRaw = output.Raw,
                          OwnerPkh = treasuryOwnerPkh,
                          UtxoStatus = UtxoStatus.Unspent,
                          Type = actionType

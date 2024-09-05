@@ -20,11 +20,13 @@ using CardanoSharp.Wallet.Models.Keys;
 using Chrysalis.Cbor;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 using TransactionInput = CardanoSharp.Wallet.Models.Transactions.TransactionInput;
+using CSyncTransactionOutput = Cardano.Sync.Data.Models.TransactionOutput;
 using Microsoft.EntityFrameworkCore;
 using Coinecta.Data.Models.Entity;
 using Cardano.Sync.Data.Models;
 using Chrysalis.Cardano.Models.Coinecta.Vesting;
 using Chrysalis.Cardano.Models.Sundae;
+using Coinecta.Data.Extensions.Chrysalis;
 
 namespace Coinecta.API.Modules.V1;
 
@@ -141,7 +143,8 @@ public class TransactionHandler(
             .Where(vtbi => vtbi.TxHash + vtbi.TxIndex == spendOutRef)
             .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
         Treasury datum = vestingTreasuryById.TreasuryDatum!;
-        Value? lockedValue = vestingTreasuryById.Amount;
+        CSyncTransactionOutput utxo = vestingTreasuryById.Utxo!.ToCardanoSync();
+        Value? lockedValue = utxo.Amount;
         (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
         INativeScriptBuilder treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
         byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
@@ -298,7 +301,10 @@ public class TransactionHandler(
             .Where(vtbi => vtbi.TxHash + vtbi.TxIndex == spendOutRef)
             .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
         Treasury datum = vestingTreasuryById.TreasuryDatum!;
-        Value? lockedValue = vestingTreasuryById.Amount;
+
+        CSyncTransactionOutput utxo = vestingTreasuryById.Utxo!.ToCardanoSync();
+        Value? lockedValue = utxo.Amount;
+        Datum? lockedDatum = utxo.Datum;
 
         // Rebuild locked UTxO input with value
         TransactionOutputValue lockedTreasuryOutputValue = new()
@@ -313,7 +319,7 @@ public class TransactionHandler(
             Value = lockedTreasuryOutputValue,
             DatumOption = new()
             {
-                RawData = vestingTreasuryById.Datum
+                RawData = lockedDatum?.Data
             }
         };
 

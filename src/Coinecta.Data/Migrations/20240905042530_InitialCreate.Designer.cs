@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    [Migration("20240903190511_AddVestingTreasuryBySlotIdColumn")]
-    partial class AddVestingTreasuryBySlotIdColumn
+    [Migration("20240905042530_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -88,9 +88,9 @@ namespace Coinecta.Data.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("text");
 
-                    b.Property<byte[]>("Datum")
+                    b.Property<string>("OwnerPkh")
                         .IsRequired()
-                        .HasColumnType("bytea");
+                        .HasColumnType("text");
 
                     b.Property<long>("Slot")
                         .HasColumnType("bigint");
@@ -101,6 +101,10 @@ namespace Coinecta.Data.Migrations
 
                     b.Property<long>("TxIndex")
                         .HasColumnType("bigint");
+
+                    b.Property<byte[]>("UtxoRaw")
+                        .IsRequired()
+                        .HasColumnType("bytea");
 
                     b.HasKey("Id");
 
@@ -118,21 +122,28 @@ namespace Coinecta.Data.Migrations
                     b.Property<long>("TxIndex")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("BlockHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<byte[]>("Datum")
-                        .IsRequired()
-                        .HasColumnType("bytea");
+                    b.Property<int>("UtxoStatus")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Id")
                         .HasColumnType("text");
 
-                    b.Property<int>("UtxoStatus")
+                    b.Property<string>("BlockHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("OwnerPkh")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
                         .HasColumnType("integer");
 
-                    b.HasKey("Slot", "TxHash", "TxIndex");
+                    b.Property<byte[]>("UtxoRaw")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("Slot", "TxHash", "TxIndex", "UtxoStatus", "Id");
 
                     b.ToTable("VestingTreasuryBySlot", "public");
                 });
@@ -188,60 +199,6 @@ namespace Coinecta.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Datum");
-                });
-
-            modelBuilder.Entity("Coinecta.Data.Models.Entity.VestingTreasuryById", b =>
-                {
-                    b.OwnsOne("Cardano.Sync.Data.Models.Value", "Amount", b1 =>
-                        {
-                            b1.Property<string>("VestingTreasuryByIdId")
-                                .HasColumnType("text");
-
-                            b1.Property<decimal>("Coin")
-                                .HasColumnType("numeric(20,0)");
-
-                            b1.Property<JsonElement>("MultiAssetJson")
-                                .HasColumnType("jsonb");
-
-                            b1.HasKey("VestingTreasuryByIdId");
-
-                            b1.ToTable("VestingTreasuryById", "public");
-
-                            b1.WithOwner()
-                                .HasForeignKey("VestingTreasuryByIdId");
-                        });
-
-                    b.Navigation("Amount");
-                });
-
-            modelBuilder.Entity("Coinecta.Data.Models.Entity.VestingTreasuryBySlot", b =>
-                {
-                    b.OwnsOne("Cardano.Sync.Data.Models.Value", "Amount", b1 =>
-                        {
-                            b1.Property<long>("VestingTreasuryBySlotSlot")
-                                .HasColumnType("bigint");
-
-                            b1.Property<string>("VestingTreasuryBySlotTxHash")
-                                .HasColumnType("text");
-
-                            b1.Property<long>("VestingTreasuryBySlotTxIndex")
-                                .HasColumnType("bigint");
-
-                            b1.Property<decimal>("Coin")
-                                .HasColumnType("numeric(20,0)");
-
-                            b1.Property<JsonElement>("MultiAssetJson")
-                                .HasColumnType("jsonb");
-
-                            b1.HasKey("VestingTreasuryBySlotSlot", "VestingTreasuryBySlotTxHash", "VestingTreasuryBySlotTxIndex");
-
-                            b1.ToTable("VestingTreasuryBySlot", "public");
-
-                            b1.WithOwner()
-                                .HasForeignKey("VestingTreasuryBySlotSlot", "VestingTreasuryBySlotTxHash", "VestingTreasuryBySlotTxIndex");
-                        });
-
-                    b.Navigation("Amount");
                 });
 #pragma warning restore 612, 618
         }

@@ -61,6 +61,43 @@ namespace Coinecta.Data.Migrations
                     table.PrimaryKey("PK_TransactionOutputs", x => new { x.Id, x.Index });
                 });
 
+            migrationBuilder.CreateTable(
+                name: "VestingTreasuryById",
+                schema: "public",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    Slot = table.Column<long>(type: "bigint", nullable: false),
+                    TxHash = table.Column<string>(type: "text", nullable: false),
+                    TxIndex = table.Column<long>(type: "bigint", nullable: false),
+                    OwnerPkh = table.Column<string>(type: "text", nullable: false),
+                    UtxoRaw = table.Column<byte[]>(type: "bytea", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VestingTreasuryById", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "VestingTreasuryBySlot",
+                schema: "public",
+                columns: table => new
+                {
+                    Slot = table.Column<long>(type: "bigint", nullable: false),
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    TxHash = table.Column<string>(type: "text", nullable: false),
+                    TxIndex = table.Column<long>(type: "bigint", nullable: false),
+                    UtxoStatus = table.Column<int>(type: "integer", nullable: false),
+                    BlockHash = table.Column<string>(type: "text", nullable: false),
+                    OwnerPkh = table.Column<string>(type: "text", nullable: false),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    UtxoRaw = table.Column<byte[]>(type: "bytea", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VestingTreasuryBySlot", x => new { x.Slot, x.TxHash, x.TxIndex, x.UtxoStatus, x.Id });
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_Blocks_Slot",
                 schema: "public",
@@ -87,6 +124,14 @@ namespace Coinecta.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "TransactionOutputs",
+                schema: "public");
+
+            migrationBuilder.DropTable(
+                name: "VestingTreasuryById",
+                schema: "public");
+
+            migrationBuilder.DropTable(
+                name: "VestingTreasuryBySlot",
                 schema: "public");
         }
     }

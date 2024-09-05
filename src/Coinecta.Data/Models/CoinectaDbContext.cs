@@ -20,25 +20,25 @@ public class CoinectaDbContext : CardanoDbContext
         modelBuilder.Entity<VestingTreasuryById>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.OwnsOne(e => e.Amount);
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.Slot).IsRequired();
             entity.Property(e => e.TxHash).IsRequired();
             entity.Property(e => e.TxIndex).IsRequired();
-            entity.Property(e => e.Datum).IsRequired();
+            entity.Property(e => e.UtxoRaw).IsRequired();
             entity.Ignore(e => e.TreasuryDatum);
+            entity.Ignore(e => e.Utxo);
         });
 
         modelBuilder.Entity<VestingTreasuryBySlot>(entity =>
         {
             entity.HasKey(e => new { e.Slot, e.TxHash, e.TxIndex, e.UtxoStatus, e.Id });
-            entity.OwnsOne(e => e.Amount);
             entity.Property(e => e.Slot).IsRequired();
             entity.Property(e => e.BlockHash).IsRequired();
             entity.Property(e => e.TxHash).IsRequired();
             entity.Property(e => e.TxIndex).IsRequired();
-            entity.Property(e => e.Datum).IsRequired();
+            entity.Property(e => e.UtxoRaw).IsRequired();
             entity.Ignore(e => e.TreasuryDatum);
+            entity.Ignore(e => e.Utxo);
         });
     }
 }
