@@ -17,14 +17,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CardanoSharp.Wallet.Models.Keys;
-using Chrysalis.Cardano.Models;
 using Chrysalis.Cbor;
 using TransactionOutput = CardanoSharp.Wallet.Models.Transactions.TransactionOutput;
 using TransactionInput = CardanoSharp.Wallet.Models.Transactions.TransactionInput;
 using Microsoft.EntityFrameworkCore;
 using Coinecta.Data.Models.Entity;
 using Cardano.Sync.Data.Models;
-using Coinecta.Data.Models.Datums;
+using Chrysalis.Cardano.Models.Coinecta.Vesting;
+using Chrysalis.Cardano.Models.Sundae;
 
 namespace Coinecta.API.Modules.V1;
 
@@ -48,6 +48,7 @@ public class TransactionHandler(
         byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
         string treasuryIdMintingPolicy = Convert.ToHexString(treasuryIdMintingPolicyBytes).ToLowerInvariant();
         (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
+        ulong treasuryExtraFund = configuration.GetValue("TreasuryExtraLovelaceFund", 5_000_000UL);
 
         // Build treasury output
         byte[] idBytes = SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request)));
@@ -63,7 +64,7 @@ public class TransactionHandler(
         Dictionary<string, Dictionary<string, ulong>> updatedTreasuryOutputAsset = request.Amount.MultiAsset;
         updatedTreasuryOutputAsset.Add(treasuryIdMintingPolicy, idAsset);
 
-        TreasuryDatum datum = new(
+        Treasury datum = new(
             new Signature(new(ownerAddr.GetPublicKeyHash())),
             new(Convert.FromHexString(request.TreasuryRootHash)),
             new(request.UnlockTime)
@@ -74,7 +75,7 @@ public class TransactionHandler(
             Address = treasuryAddr.GetBytes(),
             Value = new()
             {
-                Coin = request.Amount.Coin,
+                Coin = request.Amount.Coin + treasuryExtraFund,
                 MultiAsset = updatedTreasuryOutputAsset.ToNativeAsset()
             },
             DatumOption = new()
@@ -139,7 +140,7 @@ public class TransactionHandler(
             .AsNoTracking()
             .Where(vtbi => vtbi.TxHash + vtbi.TxIndex == spendOutRef)
             .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
-        TreasuryDatum datum = vestingTreasuryById.TreasuryDatum!;
+        Treasury datum = vestingTreasuryById.TreasuryDatum!;
         Value? lockedValue = vestingTreasuryById.Amount;
         (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
         INativeScriptBuilder treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
@@ -254,7 +255,7 @@ public class TransactionHandler(
         // Validity Interval
         NetworkType network = NetworkUtils.GetNetworkType(configuration);
         long currentSlot = SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
-        txBodyBuilder.SetValidAfter((uint)currentSlot);
+        txBodyBuilder.SetValidAfter((uint)currentSlot - 100);
         txBodyBuilder.SetValidBefore((uint)(currentSlot + 1000));
 
         // Build Transaction
@@ -296,7 +297,7 @@ public class TransactionHandler(
             .AsNoTracking()
             .Where(vtbi => vtbi.TxHash + vtbi.TxIndex == spendOutRef)
             .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
-        TreasuryDatum datum = vestingTreasuryById.TreasuryDatum!;
+        Treasury datum = vestingTreasuryById.TreasuryDatum!;
         Value? lockedValue = vestingTreasuryById.Amount;
 
         // Rebuild locked UTxO input with value

@@ -31,7 +31,7 @@ public class CoinectaDbContext : CardanoDbContext
 
         modelBuilder.Entity<VestingTreasuryBySlot>(entity =>
         {
-            entity.HasKey(e => new { e.Slot, e.TxHash, e.TxIndex, e.UtxoStatus });
+            entity.HasKey(e => new { e.Slot, e.TxHash, e.TxIndex, e.UtxoStatus, e.Id });
             entity.OwnsOne(e => e.Amount);
             entity.Property(e => e.Slot).IsRequired();
             entity.Property(e => e.BlockHash).IsRequired();

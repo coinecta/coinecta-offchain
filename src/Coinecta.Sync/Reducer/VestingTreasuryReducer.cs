@@ -8,7 +8,12 @@ using CardanoSharp.Wallet.Extensions.Models;
 using Coinecta.Data.Models.Entity;
 using Chrysalis.Cbor;
 using Coinecta.Data.Extensions;
-using Coinecta.Data.Models.Datums;
+using Coinecta.Data.Models.Enums;
+using TransactionBody = PallasDotnet.Models.TransactionBody;
+using Chrysalis.Cardano.Models.Coinecta.Vesting;
+using Chrysalis.Cardano.Models.Sundae;
+using Cardano.Sync.Extensions;
+using System.Linq.Expressions;
 
 namespace Coinecta.Sync.Reducer;
 
@@ -58,7 +63,8 @@ public class VestingTreasuryReducer(
             TxHash = vtbs.TxHash,
             TxIndex = vtbs.TxIndex,
             Datum = vtbs.Datum,
-            Amount = vtbs.Amount
+            Amount = vtbs.Amount,
+            OwnerPkh = vtbs.OwnerPkh
         });
 
         dbContext.AddRange(vestingTreasuryByIdEntries);
@@ -77,25 +83,40 @@ public class VestingTreasuryReducer(
             await ProcessOutputs(tx, response.Block, dbContext);
 
         // Get all input outrefs
-        IEnumerable<TransactionInput> inputs = response.Block.TransactionBodies.SelectMany(tx => tx.Inputs);
-        IEnumerable<string> inputOutRefs = inputs.Select(input => input.Id.ToHex() + input.Index);
+        List<((string TxHash, ulong TxIndex) Id, Redeemer? Redeemer)> inputsTuple = response.Block.TransactionBodies
+            .SelectMany(tx => tx.Inputs, (tx, input) => ((input.Id.ToHex(), input.Index), tx.Redeemers?.ToList().Find(r => r.Index == input.Index)))
+            .ToList();
+
+        IEnumerable<string> inputOutRefs = inputsTuple.Select(inputTuple => inputTuple.Id.TxHash + inputTuple.Id.TxIndex);
+
+        Expression<Func<VestingTreasuryBySlot, bool>> predicate = PredicateBuilder.False<VestingTreasuryBySlot>();
+
+        inputsTuple.ForEach(inputTuple =>
+            predicate = predicate.Or(vtbs => vtbs.TxHash == inputTuple.Id.TxHash && vtbs.TxIndex == inputTuple.Id.TxIndex)
+        );
 
         // Fetch all the corresponding entry from the database, if there's any
         // Note: an output can be spent within the same block, so we also need to check
         // all outputs processed in this block
         List<VestingTreasuryBySlot> vestingTreasuryBySlotEntries = await dbContext.VestingTreasuryBySlot
             .AsNoTracking()
-            .Where(vtbs => inputOutRefs.Contains(vtbs.TxHash + vtbs.TxIndex))
+            .Where(predicate)
             .ToListAsync();
 
         List<VestingTreasuryBySlot> vestingTreasuryBySlotLocalEntries = dbContext.VestingTreasuryBySlot.Local
             .Where(vtbs => inputOutRefs.Contains(vtbs.TxHash + vtbs.TxIndex))
             .ToList();
 
-        // Insert into database
+        // Merge
         vestingTreasuryBySlotEntries.AddRange(vestingTreasuryBySlotLocalEntries);
 
-        await ProcessInputs(vestingTreasuryBySlotEntries, response.Block, dbContext);
+        IEnumerable<(VestingTreasuryBySlot vtbs, Redeemer? Redeemer)> vestingTreasuryBySlotRedeemerTuple = vestingTreasuryBySlotEntries
+            .Select(vtbs => (vtbs, inputsTuple
+                .Where(it => it.Id.TxHash == vtbs.TxHash && it.Id.TxIndex == vtbs.TxIndex)
+                .FirstOrDefault().Redeemer)
+            );
+
+        await ProcessInputs(vestingTreasuryBySlotRedeemerTuple, response.Block, dbContext);
 
         // Before saving to database, we need to update VestingTreasuryById to reflect
         // the updated state. A vesting treasury entry is unspent if there is an output outref with
@@ -129,7 +150,12 @@ public class VestingTreasuryReducer(
             TxHash = vtbs.TxHash,
             TxIndex = vtbs.TxIndex,
             Datum = vtbs.Datum,
-            Amount = vtbs.Amount
+            Amount = new()
+            {
+                Coin = vtbs.Amount!.Coin,
+                MultiAsset = vtbs.Amount.MultiAsset
+            },
+            OwnerPkh = vtbs.OwnerPkh
         });
 
         // Insert into database
@@ -140,15 +166,43 @@ public class VestingTreasuryReducer(
         await dbContext.DisposeAsync();
     }
 
-    private static Task ProcessInputs(IEnumerable<VestingTreasuryBySlot> vestingTreasuryBySlots, Block block, CoinectaDbContext dbContext)
+    private Task ProcessInputs(IEnumerable<(VestingTreasuryBySlot Vtbs, Redeemer? Redeemer)> vestingTreasuryBySlotsTuple, Block block, CoinectaDbContext dbContext)
     {
-        vestingTreasuryBySlots.ToList().ForEach(vtbs =>
+        vestingTreasuryBySlotsTuple.ToList().ForEach(vtbsTuple =>
         {
-            VestingTreasuryBySlot updatedEntry = vtbs with
+
+            // Check if there's a redeemer
+            byte[]? redeemer = vtbsTuple.Redeemer?.Data;
+            TreasuryActionType actionType = TreasuryActionType.Create;
+
+            if (redeemer is not null)
+            {
+                try
+                {
+                    TreasuryRedeemer? treasuryRedeemer = CborSerializer.Deserialize<TreasuryRedeemer>(redeemer);
+
+                    if (treasuryRedeemer is not null)
+                    {
+                        actionType = treasuryRedeemer switch
+                        {
+                            TreasuryWithdrawRedeemer => TreasuryActionType.Withdraw,
+                            TreasuryClaimRedeemer => TreasuryActionType.Claim,
+                            _ => TreasuryActionType.Create
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex.Message);
+                }
+            }
+
+            VestingTreasuryBySlot updatedEntry = vtbsTuple.Vtbs with
             {
                 Slot = (uint)block.Slot,
                 BlockHash = block.Hash.ToHex(),
                 UtxoStatus = UtxoStatus.Spent,
+                Type = actionType
             };
 
             dbContext.Add(updatedEntry);
@@ -180,8 +234,40 @@ public class VestingTreasuryReducer(
                  try
                  {
                      // Check if datum is correct shape
-                     TreasuryDatum? datum = CborSerializer.Deserialize<TreasuryDatum>(output.Datum.Data);
+                     Treasury? datum = CborSerializer.Deserialize<Treasury>(output.Datum.Data);
                      if (datum is null) return;
+
+                     string treasuryOwnerPkh = datum.Owner switch
+                     {
+                         Signature sig => Convert.ToHexString(sig.KeyHash.Value).ToLowerInvariant(),
+                         _ => throw new Exception("Only signature is currently supported")
+                     };
+
+                     // Check if there's a redeemer
+                     byte[]? redeemer = tx.Redeemers?.FirstOrDefault()?.Data;
+                     TreasuryActionType actionType = TreasuryActionType.Create;
+
+                     if (redeemer is not null)
+                     {
+                         try
+                         {
+                             TreasuryRedeemer? treasuryRedeemer = CborSerializer.Deserialize<TreasuryRedeemer>(redeemer);
+
+                             if (treasuryRedeemer is not null)
+                             {
+                                 actionType = treasuryRedeemer switch
+                                 {
+                                     TreasuryWithdrawRedeemer => TreasuryActionType.Withdraw,
+                                     TreasuryClaimRedeemer => TreasuryActionType.Claim,
+                                     _ => TreasuryActionType.Create
+                                 };
+                             }
+                         }
+                         catch (Exception ex)
+                         {
+                             logger.LogError(ex.Message);
+                         }
+                     }
 
                      (string policyId, string assetName, ulong quantity) = assets.Where(a => a.policyId == _treasuryIdMintingPolicy).First();
                      string id = policyId + assetName;
@@ -196,7 +282,9 @@ public class VestingTreasuryReducer(
                          TxIndex = (uint)output.Index,
                          Datum = output.Datum.Data,
                          Amount = output.Amount.ToValue(),
-                         UtxoStatus = UtxoStatus.Unspent
+                         OwnerPkh = treasuryOwnerPkh,
+                         UtxoStatus = UtxoStatus.Unspent,
+                         Type = actionType
                      };
 
                      dbContext.Add(entry);
