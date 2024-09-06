@@ -9,6 +9,7 @@ public class CoinectaDbContext : CardanoDbContext
 {
     public DbSet<VestingTreasuryById> VestingTreasuryById { get; set; } = default!;
     public DbSet<VestingTreasuryBySlot> VestingTreasuryBySlot { get; set; } = default!;
+    public DbSet<VestingClaimEntryByRootHash> VestingClaimEntryByRootHash { get; set; } = default!;
 
     public CoinectaDbContext(DbContextOptions options, IConfiguration configuration)
         : base(options, configuration) { }
@@ -25,6 +26,7 @@ public class CoinectaDbContext : CardanoDbContext
             entity.Property(e => e.TxHash).IsRequired();
             entity.Property(e => e.TxIndex).IsRequired();
             entity.Property(e => e.UtxoRaw).IsRequired();
+            entity.Property(e => e.RootHash).IsRequired();
             entity.Ignore(e => e.TreasuryDatum);
             entity.Ignore(e => e.Utxo);
         });
@@ -36,6 +38,7 @@ public class CoinectaDbContext : CardanoDbContext
             entity.Property(e => e.BlockHash).IsRequired();
             entity.Property(e => e.TxHash).IsRequired();
             entity.Property(e => e.TxIndex).IsRequired();
+            entity.Property(e => e.RootHash).IsRequired();
             entity.Property(e => e.UtxoRaw).IsRequired();
             entity.Ignore(e => e.TreasuryDatum);
             entity.Ignore(e => e.Utxo);

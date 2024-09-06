@@ -1,4 +1,4 @@
-using Chrysalis.Cardano.Models.Coinecta.Vesting;
+using CClaimEntry = Chrysalis.Cardano.Models.Coinecta.Vesting.ClaimEntry;
 using Chrysalis.Cbor;
 
 namespace Coinecta.Data.Models.Entity;
@@ -10,5 +10,5 @@ public record VestingClaimEntryByRootHash
     public string ClaimantPkh { get; init; } = default!;
     public byte[] ClaimEntryRaw { get; init; } = default!;
 
-    public ClaimEntry? ClaimEntry => CborSerializer.Deserialize<ClaimEntry>(ClaimEntryRaw);
+    public CClaimEntry? ClaimEntry => CborSerializer.Deserialize<CClaimEntry>(ClaimEntryRaw);
 }

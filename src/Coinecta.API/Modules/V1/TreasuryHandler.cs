@@ -18,7 +18,13 @@ public class TreasuryHandler(
     S3Service s3Service
 )
 {
-    public async Task<string> CreateTrieAsync(CreateTreasuryTrieRequest request)
+    public async Task<IResult> CreateTrieAsync(CreateTreasuryTrieRequest request)
+    {
+        string rootHash = await ExecuteCreateTrieAsync(request);
+        return Results.Ok(rootHash);
+    }
+
+    public async Task<string> ExecuteCreateTrieAsync(CreateTreasuryTrieRequest request)
     {
         // Get the trie root hash using MPF api
         CreateMpfRequest mpfRequest = request.Data.ToMpfRequest();
@@ -29,8 +35,12 @@ public class TreasuryHandler(
 
         // Save the claim entries to the database
         // @TODO: only save when tx successfully submitted
-        List<KeyValuePair<string, string>> claimEntries = [.. mpfRequest.Data];
-        await SaveClaimEntriesToDbAsync(claimEntries, rootHash);
+        using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+        if (!await dbContext.VestingClaimEntryByRootHash.IsRootHashExistsAsync(rootHash))
+        {
+            List<KeyValuePair<string, string>> claimEntries = [.. mpfRequest.Data];
+            await SaveClaimEntriesToDbAsync(claimEntries, rootHash);
+        }
 
         return rootHash;
     }

@@ -149,6 +149,7 @@ public class VestingTreasuryReducer(
             TxHash = vtbs.TxHash,
             TxIndex = vtbs.TxIndex,
             UtxoRaw = vtbs.UtxoRaw,
+            RootHash = vtbs.RootHash,
             OwnerPkh = vtbs.OwnerPkh
         });
 
@@ -277,6 +278,7 @@ public class VestingTreasuryReducer(
                          UtxoRaw = output.Raw,
                          OwnerPkh = treasuryOwnerPkh,
                          UtxoStatus = UtxoStatus.Unspent,
+                         RootHash = Convert.ToHexString(datum.TreasuryRootHash.Value).ToLowerInvariant(),
                          Type = actionType
                      };
 

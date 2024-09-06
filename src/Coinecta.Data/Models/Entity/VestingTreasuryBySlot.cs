@@ -14,10 +14,10 @@ public record VestingTreasuryBySlot
     public string TxHash { get; init; } = default!;
     public uint TxIndex { get; init; } = 0;
     public string OwnerPkh { get; init; } = default!;
+    public string RootHash { get; init; } = default!;
     public UtxoStatus UtxoStatus { get; init; } = default!;
     public TreasuryActionType Type { get; init; } = TreasuryActionType.Create;
     public byte[] UtxoRaw { get; init; } = default!;
-
 
     public TransactionOutput? Utxo => CborSerializer.Deserialize<TransactionOutput>(UtxoRaw);
     public Treasury? TreasuryDatum => Utxo switch

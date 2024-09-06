@@ -68,13 +68,19 @@ public static class MultiAssetExtension
 
     public static MultiAsset ToChrysalis(this Dictionary<string, Dictionary<string, ulong>> self)
     {
-        Dictionary<CborBytes, TokenBundle> data = self.ToDictionary(
-            x => new CborBytes(Convert.FromHexString(x.Key)),
-            x => new TokenBundle(x.Value.ToDictionary(
-                y => new CborBytes(Convert.FromHexString(y.Key)),
-                y => new CborUlong(y.Value)
-            ))
-        );
+        Dictionary<CborBytes, TokenBundle> data = self
+                .Where(x => x.Value.Any(y => y.Value != 0))  // Keep only entries where at least one value is not 0
+                .ToDictionary(
+                    x => new CborBytes(Convert.FromHexString(x.Key)),
+                    x => new TokenBundle(
+                        x.Value
+                            .Where(y => y.Value != 0)  // Filter out inner entries where the value is 0
+                            .ToDictionary(
+                                y => new CborBytes(Convert.FromHexString(y.Key)),
+                                y => new CborUlong(y.Value)
+                            )
+                    )
+                );
 
         return new(data);
     }

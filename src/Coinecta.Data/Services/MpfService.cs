@@ -14,10 +14,21 @@ public class MpfService(IHttpClientFactory httpClientFactory)
     {
         string jsonContent = JsonSerializer.Serialize(request).ToLowerInvariant();
         StringContent content = new(jsonContent, Encoding.UTF8, "application/json");
+
         HttpResponseMessage response = await MpfClient.PostAsync("/mpf/create", content);
-
         response.EnsureSuccessStatusCode();
+        string responseString = await response.Content.ReadFromJsonAsync<string>() ?? string.Empty;
 
+        return responseString;
+    }
+
+    public async Task<string> GetProofAsync(MpfProofRequest request)
+    {
+        string jsonContent = JsonSerializer.Serialize(request).ToLowerInvariant();
+        StringContent content = new(jsonContent, Encoding.UTF8, "application/json");
+
+        HttpResponseMessage response = await MpfClient.PostAsync("/mpf/proof", content);
+        response.EnsureSuccessStatusCode();
         string responseString = await response.Content.ReadFromJsonAsync<string>() ?? string.Empty;
 
         return responseString;

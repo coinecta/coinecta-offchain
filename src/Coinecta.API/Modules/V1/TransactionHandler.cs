@@ -27,13 +27,21 @@ using Cardano.Sync.Data.Models;
 using Chrysalis.Cardano.Models.Coinecta.Vesting;
 using Chrysalis.Cardano.Models.Sundae;
 using Coinecta.Data.Extensions.Chrysalis;
+using Coinecta.Data.Services;
+using Coinecta.Data.Models.Api.Request;
+using ClaimEntry = Chrysalis.Cardano.Models.Coinecta.Vesting.ClaimEntry;
+using Chrysalis.Cardano.Models.Cbor;
+using Chrysalis.Cardano.Models.Mpf;
 using Coinecta.Data.Models.Api.Response;
 
 namespace Coinecta.API.Modules.V1;
 
 public class TransactionHandler(
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
-    IConfiguration configuration
+    IConfiguration configuration,
+    MpfService mpfService,
+    S3Service s3Service,
+    TreasuryHandler treasuryHandler
 )
 {
     public string Finalize(FinalizeTransactionRequest request)
@@ -42,7 +50,7 @@ public class TransactionHandler(
         return tx.Sign(request.TxWitnessCbor);
     }
 
-    public CreateTreasuryResponse CreateTreasury(CreateTreasuryRequest request)
+    public string CreateTreasury(CreateTreasuryRequest request)
     {
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
@@ -55,14 +63,13 @@ public class TransactionHandler(
 
         // Build treasury output
         byte[] idBytes = SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request)));
-        string idHex = Convert.ToHexString(idBytes).ToLowerInvariant()[..32];
-        string id = treasuryIdMintingPolicy + idHex;
+        string idHex = Convert.ToHexString(idBytes).ToLowerInvariant();
 
         ITokenBundleBuilder idAssetBundleBuilder = TokenBundleBuilder.Create;
-        idAssetBundleBuilder.AddToken(treasuryIdMintingPolicyBytes, Convert.FromHexString(idHex), 1);
+        idAssetBundleBuilder.AddToken(treasuryIdMintingPolicyBytes, Convert.FromHexString(idHex[..32]), 1);
 
         Dictionary<string, ulong> idAsset = new(){
-            {idHex, 1}
+            {idHex[..32], 1}
         };
 
         Dictionary<string, Dictionary<string, ulong>> updatedTreasuryOutputAsset = request.Amount.MultiAsset;
@@ -126,7 +133,7 @@ public class TransactionHandler(
             uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
             tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
 
-            return new(id, Convert.ToHexString(tx.Serialize()));
+            return Convert.ToHexString(tx.Serialize());
         }
         catch (Exception ex)
         {
@@ -138,24 +145,33 @@ public class TransactionHandler(
     {
         // Prepare needed data
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+        VestingTreasuryById? vestingTreasuryById = request switch
+        {
+            { Id: not null } => await dbContext.VestingTreasuryById.FetchId(request.Id),
+            { SpendOutRef: not null } => await dbContext.VestingTreasuryById.FetchOutref(request.SpendOutRef),
+            _ => null
+        } ?? throw new Exception("Treasury not found");
 
-        string spendOutRef = request.SpendOutRef.TxHash.ToLowerInvariant() + request.SpendOutRef.Index;
-        VestingTreasuryById vestingTreasuryById = await dbContext.VestingTreasuryById
-            .AsNoTracking()
-            .Where(vtbi => vtbi.TxHash + vtbi.TxIndex == spendOutRef)
-            .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
         Treasury datum = vestingTreasuryById.TreasuryDatum!;
-        CSyncTransactionOutput utxo = vestingTreasuryById.Utxo!.ToCardanoSync();
-        Value? lockedValue = utxo.Amount;
+
+        // Addresses
+        Address ownerAddr = new(request.OwnerAddress);
+        Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
         (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
+
+        // Utxos
+        CSyncTransactionOutput utxo = vestingTreasuryById.Utxo!.ToCardanoSync();
+        Utxo collateralUtxo = TransactionUtils.DeserializeUtxoCborHex([request.RawCollateralUtxo]).First();
+        Value? lockedValue = utxo.Amount;
+
+        // Minting details
         INativeScriptBuilder treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
         byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
         string treasuryIdMintingPolicy = Convert.ToHexString(treasuryIdMintingPolicyBytes).ToLowerInvariant();
 
-        Address ownerAddr = new(request.OwnerAddress);
-        Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
-        Utxo collateralUtxo = TransactionUtils.DeserializeUtxoCborHex([request.RawCollateralUtxo]).First();
+        // Reference Inputs
         TransactionInput treasuryValidatorReferenceInput = CoinectaUtils.GetTreasuryReferenceInput(configuration);
+
 
         // in the meantime, we temporarily pass the datum in the request body
         byte[] treasuryOwnerPkh = datum.Owner switch
@@ -206,8 +222,8 @@ public class TransactionHandler(
 
         TransactionInput lockedTreasuryInput = new()
         {
-            TransactionId = Convert.FromHexString(request.SpendOutRef.TxHash),
-            TransactionIndex = request.SpendOutRef.Index,
+            TransactionId = Convert.FromHexString(vestingTreasuryById.TxHash),
+            TransactionIndex = vestingTreasuryById.TxIndex,
             Output = lockedTreasuryOutput
         };
 
@@ -282,27 +298,90 @@ public class TransactionHandler(
         }
     }
 
-    public async Task<string> TreasuryClaimAsync(TreasuryClaimRequest request)
+    public async Task<TreasuryClaimResponse> TreasuryClaimAsync(TreasuryClaimRequest request)
     {
-        /// Prepare needed data
-        using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+        if (request.Id is null && request.SpendOutRef is null)
+            throw new Exception("Please provide an id or outref to claim");
 
+        // Addresses
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
+        (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
+
+        // Fetch treasury from the database
+        using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+        VestingTreasuryById? vestingTreasuryById = request switch
+        {
+            { Id: not null } => await dbContext.VestingTreasuryById.FetchId(request.Id),
+            { SpendOutRef: not null } => await dbContext.VestingTreasuryById.FetchOutref(request.SpendOutRef),
+            _ => null
+        } ?? throw new Exception("Treasury not found");
+
+        // Extract needed data from treasury datum
+        Treasury datum = vestingTreasuryById.TreasuryDatum!;
+        string ownerPkh = Convert.ToHexString(ownerAddr.GetPublicKeyHash()).ToLower();
+
+        // Fetch the claim entry
+        string claimEntryId = vestingTreasuryById.RootHash + ownerPkh;
+        VestingClaimEntryByRootHash? vestingClaimEntryByRootHash =
+            await dbContext.VestingClaimEntryByRootHash.FetchIdAsync(claimEntryId) ?? throw new Exception("Claim entry not found");
+
+        // If claim entry exists, get latest mpf data, proof and updated roothash
+        string mpfBucket = configuration["MpfBucket"]!;
+        string? mpfRawData = await s3Service.DownloadJsonAsync(mpfBucket, vestingTreasuryById.RootHash);
+        CreateTreasuryTrieRequest treasuryTrieRequest = JsonSerializer.Deserialize<CreateTreasuryTrieRequest>(mpfRawData!) ?? throw new Exception("Invalid MPF data");
+
+        // Fetch the proof and the original mpf data
+        Dictionary<string, string> mpfData = treasuryTrieRequest.Data.ToMpfRequest().Data;
+        byte[] claimRawKey = CborSerializer.Serialize(vestingClaimEntryByRootHash.ClaimEntry?.Claimant!);
+        string claimKey = Convert.ToHexString(claimRawKey).ToLowerInvariant();
+        string proofRaw = await mpfService.GetProofAsync(new(mpfData, claimKey));
+
+        // Create updated mpf trie
+        string originalRawClaimEntry = mpfData[claimKey];
+        ClaimEntry claimEntry = CborSerializer.Deserialize<ClaimEntry>(Convert.FromHexString(originalRawClaimEntry))!;
+        ClaimEntry updatedClaimEntry = claimEntry with
+        {
+            DirectValue = new([]),
+            VestingValue = new([])
+        };
+        string updatedRawClaimEntry = Convert.ToHexString(CborSerializer.Serialize(updatedClaimEntry));
+        mpfData[claimKey] = updatedRawClaimEntry;
+
+        // @TODO: Remove this
+        treasuryTrieRequest.Data.ClaimEntries[ownerAddr.ToString()] = treasuryTrieRequest.Data.ClaimEntries[ownerAddr.ToString()] with
+        {
+            DirectValue = new(),
+            VestingValue = new()
+        };
+
+        CreateTreasuryTrieRequest updatedreasuryTrieRequest = treasuryTrieRequest with
+        {
+            Data = treasuryTrieRequest.Data
+        };
+
+        string updatedRootHash = await treasuryHandler.ExecuteCreateTrieAsync(updatedreasuryTrieRequest);
+
+        Treasury updatedDatum = datum with
+        {
+            TreasuryRootHash = new(Convert.FromHexString(updatedRootHash))
+        };
+        TreasuryClaimRedeemer redeemer = new(
+            CborSerializer.Deserialize<Proof>(Convert.FromHexString(proofRaw))!,
+            claimEntry
+        );
+
+        // Utxos
         IEnumerable<Utxo> utxos = TransactionUtils.DeserializeUtxoCborHex(request.RawUtxos);
         Utxo collateralUtxo = TransactionUtils.DeserializeUtxoCborHex([request.RawCollateralUtxo]).First();
+
+        // Reference Inputs
         TransactionInput treasuryValidatorReferenceInput = CoinectaUtils.GetTreasuryReferenceInput(configuration);
-        (Address treasuryIdMintingWalletAddr, PublicKey vkey, PrivateKey skey) = CoinectaUtils.GetTreasuryIdMintingScriptWallet(configuration);
+
+        // Minting scripts
         INativeScriptBuilder treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
         byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
         string treasuryIdMintingPolicy = Convert.ToHexString(treasuryIdMintingPolicyBytes).ToLowerInvariant();
-
-        string spendOutRef = request.SpendOutRef.TxHash.ToLowerInvariant() + request.SpendOutRef.Index;
-        VestingTreasuryById vestingTreasuryById = await dbContext.VestingTreasuryById
-            .AsNoTracking()
-            .Where(vtbi => vtbi.TxHash + vtbi.TxIndex == spendOutRef)
-            .FirstOrDefaultAsync() ?? throw new Exception("Vesting treasury not found");
-        Treasury datum = vestingTreasuryById.TreasuryDatum!;
 
         CSyncTransactionOutput utxo = vestingTreasuryById.Utxo!.ToCardanoSync();
         Value? lockedValue = utxo.Amount;
@@ -327,8 +406,8 @@ public class TransactionHandler(
 
         TransactionInput lockedTreasuryInput = new()
         {
-            TransactionId = Convert.FromHexString(request.SpendOutRef.TxHash),
-            TransactionIndex = request.SpendOutRef.Index,
+            TransactionId = Convert.FromHexString(vestingTreasuryById.TxHash),
+            TransactionIndex = vestingTreasuryById.TxIndex,
             Output = lockedTreasuryOutput
         };
 
@@ -338,13 +417,25 @@ public class TransactionHandler(
         // @TODO: Handle all scenarios
 
         // Build the direct claim output
-        TransactionOutput? directClaimOutput = request.DirectClaimValue is not null ? new()
+        Dictionary<string, Dictionary<string, ulong>> directValue = claimEntry.DirectValue.ToDictionary();
+        ulong directCoin = 0;
+        if (directValue.TryGetValue(string.Empty, out var directLovelace) && directLovelace != null)
+        {
+            if (directLovelace.TryGetValue(string.Empty, out var directLovelaceValue))
+            {
+                directCoin = directLovelaceValue;
+            }
+
+            directValue.Remove(string.Empty);
+        }
+
+        TransactionOutput? directClaimOutput = claimEntry.DirectValue is not null ? new()
         {
             Address = ownerAddr.GetBytes(),
             Value = new()
             {
-                Coin = request.DirectClaimValue.Coin,
-                MultiAsset = request.DirectClaimValue.MultiAsset.ToNativeAsset()
+                Coin = directCoin,
+                MultiAsset = directValue.ToNativeAsset()
             }
         } : null;
 
@@ -356,14 +447,26 @@ public class TransactionHandler(
         }
 
         // @TODO: Vested claim output
+        Dictionary<string, Dictionary<string, ulong>> vestingValue = claimEntry.VestingValue.ToDictionary();
+        ulong vestingCoin = 0;
+        if (vestingValue.TryGetValue(string.Empty, out var vestingLovelace) && vestingLovelace != null)
+        {
+            if (vestingLovelace.TryGetValue(string.Empty, out var vestingLovelaceValue))
+            {
+                // Safely assign the value to directCoin
+                vestingCoin = vestingLovelaceValue;
+            }
+
+            vestingValue.Remove(string.Empty);
+        }
 
         // Build the treasury return output
         TransactionOutputValue treasuryReturnOutputValue = new()
         {
-            Coin = lockedValue.Coin - (request.DirectClaimValue?.Coin ?? 0) - (request.VestedClaimValue?.Coin ?? 0),
+            Coin = lockedValue.Coin - directCoin - vestingCoin,
             MultiAsset = lockedValue.MultiAsset
-                .Subtract(request.DirectClaimValue?.MultiAsset ?? [])
-                .Subtract(request.VestedClaimValue?.MultiAsset ?? [])
+                .Subtract(directValue)
+                .Subtract(vestingValue)
                 .ToNativeAsset()
         };
 
@@ -373,9 +476,11 @@ public class TransactionHandler(
             Value = treasuryReturnOutputValue,
             DatumOption = new()
             {
-                RawData = Convert.FromHexString(request.ReturnDatum)
+                RawData = CborSerializer.Serialize(updatedDatum)
             }
         };
+
+        string treasuryOutputRaw = Convert.ToHexString(treasuryReturnOutput.GetCBOR().EncodeToBytes()).ToLowerInvariant();
 
         // Build Transaction Body
         ITransactionBodyBuilder txBodyBuilder = TransactionBodyBuilder.Create;
@@ -431,7 +536,7 @@ public class TransactionHandler(
         RedeemerBuilder? claimRedeemer = RedeemerBuilder.Create
             .SetTag(RedeemerTag.Spend)
             .SetIndex(redeemerIndex)
-            .SetPlutusData(CBORObject.DecodeFromBytes(Convert.FromHexString(request.Redeemer)).GetPlutusData()) as RedeemerBuilder;
+            .SetPlutusData(CBORObject.DecodeFromBytes(CborSerializer.Serialize(redeemer)).GetPlutusData()) as RedeemerBuilder;
 
         txBodyBuilder.SetScriptDataHash([claimRedeemer!.Build()], [], CostModelUtility.PlutusV2CostModel.Serialize());
 
@@ -460,7 +565,7 @@ public class TransactionHandler(
             uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
             tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
 
-            return Convert.ToHexString(tx.Serialize());
+            return new(Convert.ToHexString(tx.Serialize()), treasuryOutputRaw);
         }
         catch (Exception ex)
         {
