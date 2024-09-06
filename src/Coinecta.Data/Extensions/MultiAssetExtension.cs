@@ -1,4 +1,6 @@
 using CardanoSharp.Wallet.Models.Transactions;
+using Chrysalis.Cardano.Models.Cbor;
+using Chrysalis.Cardano.Models.Core;
 
 namespace Coinecta.Data.Extensions;
 
@@ -62,5 +64,18 @@ public static class MultiAssetExtension
         }
 
         return self;
+    }
+
+    public static MultiAsset ToChrysalis(this Dictionary<string, Dictionary<string, ulong>> self)
+    {
+        Dictionary<CborBytes, TokenBundle> data = self.ToDictionary(
+            x => new CborBytes(Convert.FromHexString(x.Key)),
+            x => new TokenBundle(x.Value.ToDictionary(
+                y => new CborBytes(Convert.FromHexString(y.Key)),
+                y => new CborUlong(y.Value)
+            ))
+        );
+
+        return new(data);
     }
 }

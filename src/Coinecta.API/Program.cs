@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Carter;
 using Coinecta.API.Modules.V1;
 using Coinecta.Data.Models;
+using Coinecta.Data.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<TransactionHandler>();
+builder.Services.AddSingleton<TreasuryHandler>();
+builder.Services.AddSingleton<MpfService>();
+builder.Services.AddSingleton<S3Service>();
 builder.Services.AddCarter();
 
 builder.Services.AddApiVersioning(options =>
@@ -39,6 +43,11 @@ builder.Services.AddDbContextFactory<CoinectaDbContext>(options =>
                 );
             }
         );
+});
+
+builder.Services.AddHttpClient("MpfClient", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["MpfUrl"]!);
 });
 
 var app = builder.Build();

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Coinecta.Data.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    partial class CoinectaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240906021432_AddVestingClaimEntryByRootHash")]
+    partial class AddVestingClaimEntryByRootHash
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -90,6 +93,10 @@ namespace Coinecta.Data.Migrations
                         .HasColumnType("bytea");
 
                     b.Property<string>("ClaimantPkh")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NftId")
                         .IsRequired()
                         .HasColumnType("text");
 

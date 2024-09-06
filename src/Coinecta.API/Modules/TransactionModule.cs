@@ -21,6 +21,7 @@ public class TransactionModule(TransactionHandler transactionHandlerV1) : Carter
             .WithTags("Transaction")
             .WithOpenApi();
 
+        // Treasury
         group.MapPost("/treasury/create", transactionHandlerV1.CreateTreasury)
             .MapToApiVersion(1)
             .WithName("CreateTreasury")

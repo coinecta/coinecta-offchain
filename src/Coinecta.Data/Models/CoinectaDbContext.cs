@@ -40,5 +40,14 @@ public class CoinectaDbContext : CardanoDbContext
             entity.Ignore(e => e.TreasuryDatum);
             entity.Ignore(e => e.Utxo);
         });
+
+        modelBuilder.Entity<VestingClaimEntryByRootHash>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RootHash).IsRequired();
+            entity.Property(e => e.ClaimantPkh).IsRequired();
+            entity.Property(e => e.ClaimEntryRaw).IsRequired();
+            entity.Ignore(e => e.ClaimEntry);
+        });
     }
 }

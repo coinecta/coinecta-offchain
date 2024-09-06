@@ -1,4 +1,3 @@
-using Cardano.Sync.Data.Models;
 using Chrysalis.Cardano.Models.Coinecta.Vesting;
 using Chrysalis.Cardano.Models.Core;
 using Chrysalis.Cbor;
@@ -21,8 +20,10 @@ public record VestingTreasuryBySlot
 
 
     public TransactionOutput? Utxo => CborSerializer.Deserialize<TransactionOutput>(UtxoRaw);
-    public Treasury? TreasuryDatum => Utxo switch {
-        BabbageTransactionOutput babbage => babbage.Datum switch {
+    public Treasury? TreasuryDatum => Utxo switch
+    {
+        BabbageTransactionOutput babbage => babbage.Datum switch
+        {
             InlineDatumOption inlineDatum => CborSerializer.Deserialize<Treasury>(inlineDatum.Data.Value),
             _ => null
         },
