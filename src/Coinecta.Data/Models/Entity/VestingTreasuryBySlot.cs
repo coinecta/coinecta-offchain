@@ -6,9 +6,9 @@ using TransactionOutput = Chrysalis.Cardano.Models.Core.TransactionOutput;
 
 namespace Coinecta.Data.Models.Entity;
 
-public record VestingTreasuryBySlot
+public record VestingTreasuryBySlot : IVestingTreasury
 {
-    public uint Slot { get; init; } = 0;
+    public ulong Slot { get; init; } = 0;
     public string Id { get; init; } = default!;
     public string BlockHash { get; init; } = default!;
     public string TxHash { get; init; } = default!;

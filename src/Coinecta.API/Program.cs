@@ -13,6 +13,7 @@ builder.Services.AddSingleton<TransactionHandler>();
 builder.Services.AddSingleton<TreasuryHandler>();
 builder.Services.AddSingleton<MpfService>();
 builder.Services.AddSingleton<S3Service>();
+builder.Services.AddSingleton<TxSubmitService>();
 builder.Services.AddCarter();
 
 builder.Services.AddApiVersioning(options =>
@@ -48,6 +49,11 @@ builder.Services.AddDbContextFactory<CoinectaDbContext>(options =>
 builder.Services.AddHttpClient("MpfClient", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["MpfUrl"]!);
+});
+
+builder.Services.AddHttpClient("SubmitTxClient", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["SubmitTxUrl"]!);
 });
 
 var app = builder.Build();

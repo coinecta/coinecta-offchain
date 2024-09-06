@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coinecta.Data.Migrations
 {
     [DbContext(typeof(CoinectaDbContext))]
-    [Migration("20240906035242_AddRootHash")]
-    partial class AddRootHash
+    [Migration("20240906082651_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -118,8 +118,8 @@ namespace Coinecta.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long>("Slot")
-                        .HasColumnType("bigint");
+                    b.Property<decimal>("Slot")
+                        .HasColumnType("numeric(20,0)");
 
                     b.Property<string>("TxHash")
                         .IsRequired()
@@ -139,8 +139,8 @@ namespace Coinecta.Data.Migrations
 
             modelBuilder.Entity("Coinecta.Data.Models.Entity.VestingTreasuryBySlot", b =>
                 {
-                    b.Property<long>("Slot")
-                        .HasColumnType("bigint");
+                    b.Property<decimal>("Slot")
+                        .HasColumnType("numeric(20,0)");
 
                     b.Property<string>("TxHash")
                         .HasColumnType("text");
@@ -176,6 +176,34 @@ namespace Coinecta.Data.Migrations
                     b.HasKey("Slot", "TxHash", "TxIndex", "UtxoStatus", "Id");
 
                     b.ToTable("VestingTreasuryBySlot", "public");
+                });
+
+            modelBuilder.Entity("Coinecta.Data.Models.Entity.VestingTreasurySubmittedTx", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OwnerPkh")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Slot")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<string>("TxHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("TxIndex")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("UtxoRaw")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VestingTreasurySubmittedTxs", "public");
                 });
 
             modelBuilder.Entity("Cardano.Sync.Data.Models.TransactionOutput", b =>

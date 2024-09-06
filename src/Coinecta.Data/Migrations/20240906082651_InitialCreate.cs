@@ -62,15 +62,31 @@ namespace Coinecta.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "VestingClaimEntryByRootHash",
+                schema: "public",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    RootHash = table.Column<string>(type: "text", nullable: false),
+                    ClaimantPkh = table.Column<string>(type: "text", nullable: false),
+                    ClaimEntryRaw = table.Column<byte[]>(type: "bytea", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VestingClaimEntryByRootHash", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "VestingTreasuryById",
                 schema: "public",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
-                    Slot = table.Column<long>(type: "bigint", nullable: false),
+                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
                     TxHash = table.Column<string>(type: "text", nullable: false),
                     TxIndex = table.Column<long>(type: "bigint", nullable: false),
                     OwnerPkh = table.Column<string>(type: "text", nullable: false),
+                    RootHash = table.Column<string>(type: "text", nullable: false),
                     UtxoRaw = table.Column<byte[]>(type: "bytea", nullable: false)
                 },
                 constraints: table =>
@@ -83,19 +99,37 @@ namespace Coinecta.Data.Migrations
                 schema: "public",
                 columns: table => new
                 {
-                    Slot = table.Column<long>(type: "bigint", nullable: false),
+                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
                     Id = table.Column<string>(type: "text", nullable: false),
                     TxHash = table.Column<string>(type: "text", nullable: false),
                     TxIndex = table.Column<long>(type: "bigint", nullable: false),
                     UtxoStatus = table.Column<int>(type: "integer", nullable: false),
                     BlockHash = table.Column<string>(type: "text", nullable: false),
                     OwnerPkh = table.Column<string>(type: "text", nullable: false),
+                    RootHash = table.Column<string>(type: "text", nullable: false),
                     Type = table.Column<int>(type: "integer", nullable: false),
                     UtxoRaw = table.Column<byte[]>(type: "bytea", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_VestingTreasuryBySlot", x => new { x.Slot, x.TxHash, x.TxIndex, x.UtxoStatus, x.Id });
+                });
+
+            migrationBuilder.CreateTable(
+                name: "VestingTreasurySubmittedTxs",
+                schema: "public",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    Slot = table.Column<decimal>(type: "numeric(20,0)", nullable: false),
+                    TxHash = table.Column<string>(type: "text", nullable: false),
+                    TxIndex = table.Column<long>(type: "bigint", nullable: false),
+                    OwnerPkh = table.Column<string>(type: "text", nullable: false),
+                    UtxoRaw = table.Column<byte[]>(type: "bytea", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VestingTreasurySubmittedTxs", x => x.Id);
                 });
 
             migrationBuilder.CreateIndex(
@@ -127,11 +161,19 @@ namespace Coinecta.Data.Migrations
                 schema: "public");
 
             migrationBuilder.DropTable(
+                name: "VestingClaimEntryByRootHash",
+                schema: "public");
+
+            migrationBuilder.DropTable(
                 name: "VestingTreasuryById",
                 schema: "public");
 
             migrationBuilder.DropTable(
                 name: "VestingTreasuryBySlot",
+                schema: "public");
+
+            migrationBuilder.DropTable(
+                name: "VestingTreasurySubmittedTxs",
                 schema: "public");
         }
     }

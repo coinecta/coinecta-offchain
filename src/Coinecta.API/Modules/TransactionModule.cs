@@ -37,6 +37,11 @@ public class TransactionModule(TransactionHandler transactionHandlerV1) : Carter
             .WithName("TreasuryClaim")
             .WithDescription("Member claims direct/vested funds from the treasury");
 
+        group.MapPost("/treasury/claim/submit", transactionHandlerV1.TreasuryClaimSubmitTxAsync)
+            .MapToApiVersion(1)
+            .WithName("TreasuryClaimSubmit")
+            .WithDescription("Treasury Claim Tx specific submission endpoint");
+
         group.MapPost("/finalize", transactionHandlerV1.Finalize)
             .MapToApiVersion(1)
             .WithName("FinalizeTransaction")

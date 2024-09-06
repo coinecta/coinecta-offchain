@@ -1,6 +1,6 @@
 using Cardano.Sync.Data.Models;
 
-namespace Coinecta.Data.Models;
+namespace Coinecta.Data.Models.Api.Request;
 
 public record TreasuryClaimRequest(
     OutputReference? SpendOutRef,

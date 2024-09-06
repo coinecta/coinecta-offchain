@@ -30,7 +30,6 @@ using Coinecta.Data.Extensions.Chrysalis;
 using Coinecta.Data.Services;
 using Coinecta.Data.Models.Api.Request;
 using ClaimEntry = Chrysalis.Cardano.Models.Coinecta.Vesting.ClaimEntry;
-using Chrysalis.Cardano.Models.Cbor;
 using Chrysalis.Cardano.Models.Mpf;
 using Coinecta.Data.Models.Api.Response;
 
@@ -39,6 +38,7 @@ namespace Coinecta.API.Modules.V1;
 public class TransactionHandler(
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
     IConfiguration configuration,
+    TxSubmitService txSubmitService,
     MpfService mpfService,
     S3Service s3Service,
     TreasuryHandler treasuryHandler
@@ -50,7 +50,7 @@ public class TransactionHandler(
         return tx.Sign(request.TxWitnessCbor);
     }
 
-    public string CreateTreasury(CreateTreasuryRequest request)
+    public CreateTreasuryResponse CreateTreasury(CreateTreasuryRequest request)
     {
         Address ownerAddr = new(request.OwnerAddress);
         Address treasuryAddr = new(configuration["TreasuryAddress"] ?? throw new Exception("Treasury address not configured."));
@@ -63,13 +63,14 @@ public class TransactionHandler(
 
         // Build treasury output
         byte[] idBytes = SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request)));
-        string idHex = Convert.ToHexString(idBytes).ToLowerInvariant();
+        string idHex = Convert.ToHexString(idBytes).ToLowerInvariant()[..32];
+        string id = treasuryIdMintingPolicy + idHex;
 
         ITokenBundleBuilder idAssetBundleBuilder = TokenBundleBuilder.Create;
-        idAssetBundleBuilder.AddToken(treasuryIdMintingPolicyBytes, Convert.FromHexString(idHex[..32]), 1);
+        idAssetBundleBuilder.AddToken(treasuryIdMintingPolicyBytes, Convert.FromHexString(idHex), 1);
 
         Dictionary<string, ulong> idAsset = new(){
-            {idHex[..32], 1}
+            {idHex, 1}
         };
 
         Dictionary<string, Dictionary<string, ulong>> updatedTreasuryOutputAsset = request.Amount.MultiAsset;
@@ -133,7 +134,7 @@ public class TransactionHandler(
             uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
             tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
 
-            return Convert.ToHexString(tx.Serialize());
+            return new(id, Convert.ToHexString(tx.Serialize()));
         }
         catch (Exception ex)
         {
@@ -571,5 +572,32 @@ public class TransactionHandler(
         {
             throw new Exception($"Error building transaction: {ex.Message}. Please contact support for assistance.");
         }
+    }
+
+    public async Task<IResult> TreasuryClaimSubmitTxAsync(TreasuryClaimSubmitTxRequest request)
+    {
+        NetworkType network = NetworkUtils.GetNetworkType(configuration);
+        ulong currentSlot = (ulong)SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
+        
+        using CoinectaDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        string txId = await txSubmitService.SubmitTxAsync(request.TxRaw);
+    
+        dbContext.VestingTreasurySubmittedTxs.Add(new()
+        {
+            Id = request.Id,
+            TxHash = txId,
+            TxIndex = 0,
+            UtxoRaw = Convert.FromHexString(request.UtxoRaw),
+            OwnerPkh = request.OwnerPkh,
+            Slot = currentSlot
+        });
+
+        await dbContext.SaveChangesAsync();
+        await dbContext.DisposeAsync();
+
+        return Results.Accepted(
+            null,
+            txId
+        );
     }
 }

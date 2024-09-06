@@ -1,4 +1,4 @@
-namespace Coinecta.Data.Models;
+namespace Coinecta.Data.Models.Api.Request;
 
 public record TreasuryWithdrawRequest(
     OutputReference? SpendOutRef,
