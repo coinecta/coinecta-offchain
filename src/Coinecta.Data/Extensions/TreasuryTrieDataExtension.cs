@@ -32,7 +32,14 @@ public static class TreasuryTrieDataExtension
                 MultisigScript claimant = new Signature(new(claimantAddress.GetPublicKeyHash()));
                 MultiAsset directValue = kvp.Value.DirectValue?.ToChrysalisValue() ?? new([]);
                 MultiAsset vestingValue = kvp.Value.VestingValue?.ToChrysalisValue() ?? new([]);
-                ClaimEntry claimEntry = new(claimant, vestingValue, directValue, vestingParams, vestingProgram);
+                CborBytes actualtVestingParams = kvp.Value.VestingParameters is not null ?
+                    new(Convert.FromHexString(kvp.Value.VestingParameters)) :
+                    vestingParams;
+                CborBytes actualVestingProgram = kvp.Value.VestingProgramScriptHash is not null ?
+                    new(Convert.FromHexString(kvp.Value.VestingProgramScriptHash)) :
+                    vestingProgram;
+
+                ClaimEntry claimEntry = new(claimant, vestingValue, directValue, actualtVestingParams, actualVestingProgram);
                 string serializedClaimEntry = Convert.ToHexString(CborSerializer.Serialize(claimEntry)).ToLowerInvariant();
                 return serializedClaimEntry;
             }

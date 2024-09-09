@@ -1,14 +1,19 @@
 using System.Text.Json;
+using Cardano.Sync.Data.Models.Datums;
+using CardanoSharp.Wallet.Extensions.Models;
 using Chrysalis.Cardano.Models.Coinecta.Vesting;
 using Chrysalis.Cardano.Models.Sundae;
 using Chrysalis.Cbor;
 using Coinecta.Data.Extensions;
 using Coinecta.Data.Models;
 using Coinecta.Data.Models.Api.Request;
+using Coinecta.Data.Models.Api.Response;
 using Coinecta.Data.Models.Entity;
 using Coinecta.Data.Services;
 using Microsoft.EntityFrameworkCore;
-
+using CAddress = CardanoSharp.Wallet.Models.Addresses.Address;
+using ClaimEntry = Chrysalis.Cardano.Models.Coinecta.Vesting.ClaimEntry;
+using Signature = Chrysalis.Cardano.Models.Sundae.Signature;
 namespace Coinecta.API.Modules.V1;
 
 public class TreasuryHandler(
@@ -22,6 +27,49 @@ public class TreasuryHandler(
     {
         string rootHash = await ExecuteCreateTrieAsync(request);
         return Results.Ok(rootHash);
+    }
+
+    public async Task<IResult> PrepareClaimDataAsync(string rootHash, string ownerAddress)
+    {
+        CAddress ownerAddr = new(ownerAddress);
+
+        // If claim entry exists, get latest mpf data, proof and updated roothash
+        string mpfBucket = configuration["MpfBucket"]!;
+        string? mpfRawData = await s3Service.DownloadJsonAsync(mpfBucket, rootHash);
+        CreateTreasuryTrieRequest treasuryTrieRequest = JsonSerializer.Deserialize<CreateTreasuryTrieRequest>(mpfRawData!) ?? throw new Exception("Invalid MPF data");
+
+        // Fetch the proof and the original mpf data
+        MultisigScript ownerSignature = new Signature(new(ownerAddr.GetPublicKeyHash()));
+        Dictionary<string, string> mpfData = treasuryTrieRequest.Data.ToMpfRequest().Data;
+        byte[] claimRawKey = CborSerializer.Serialize(ownerSignature);
+        string claimKey = Convert.ToHexString(claimRawKey).ToLowerInvariant();
+        string proofRaw = await mpfService.GetProofAsync(new(mpfData, claimKey));
+
+        // Create updated mpf trie
+        string originalRawClaimEntry = mpfData[claimKey];
+        ClaimEntry claimEntry = CborSerializer.Deserialize<ClaimEntry>(Convert.FromHexString(originalRawClaimEntry))!;
+        ClaimEntry updatedClaimEntry = claimEntry with
+        {
+            DirectValue = new([]),
+            VestingValue = new([])
+        };
+        string updatedRawClaimEntry = Convert.ToHexString(CborSerializer.Serialize(updatedClaimEntry));
+        mpfData[claimKey] = updatedRawClaimEntry;
+
+        treasuryTrieRequest.Data.ClaimEntries[ownerAddr.ToString()] = treasuryTrieRequest.Data.ClaimEntries[ownerAddr.ToString()] with
+        {
+            DirectValue = new(),
+            VestingValue = new()
+        };
+
+        CreateTreasuryTrieRequest updatedreasuryTrieRequest = treasuryTrieRequest with
+        {
+            Data = treasuryTrieRequest.Data
+        };
+
+        string updatedRootHash = await ExecuteCreateTrieAsync(updatedreasuryTrieRequest);
+
+        return Results.Ok(new ClaimDataResponse(updatedRootHash, proofRaw, originalRawClaimEntry));
     }
 
     public async Task<string> ExecuteCreateTrieAsync(CreateTreasuryTrieRequest request)

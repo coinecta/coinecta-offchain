@@ -6,6 +6,9 @@ public record TreasuryClaimRequest(
     OutputReference? SpendOutRef,
     string? Id,
     string OwnerAddress,
+    string UpdatedRootHash,
+    string RawProof,
+    string RawClaimEntry,
     string RawCollateralUtxo,
     IEnumerable<string> RawUtxos
 );

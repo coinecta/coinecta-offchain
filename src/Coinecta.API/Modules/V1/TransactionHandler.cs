@@ -38,10 +38,7 @@ namespace Coinecta.API.Modules.V1;
 public class TransactionHandler(
     IDbContextFactory<CoinectaDbContext> dbContextFactory,
     IConfiguration configuration,
-    TxSubmitService txSubmitService,
-    MpfService mpfService,
-    S3Service s3Service,
-    TreasuryHandler treasuryHandler
+    TxSubmitService txSubmitService
 )
 {
     public string Finalize(FinalizeTransactionRequest request)
@@ -322,53 +319,15 @@ public class TransactionHandler(
         Treasury datum = vestingTreasuryById.TreasuryDatum!;
         string ownerPkh = Convert.ToHexString(ownerAddr.GetPublicKeyHash()).ToLower();
 
-        // Fetch the claim entry
-        string claimEntryId = vestingTreasuryById.RootHash + ownerPkh;
-        VestingClaimEntryByRootHash? vestingClaimEntryByRootHash =
-            await dbContext.VestingClaimEntryByRootHash.FetchIdAsync(claimEntryId) ?? throw new Exception("Claim entry not found");
-
-        // If claim entry exists, get latest mpf data, proof and updated roothash
-        string mpfBucket = configuration["MpfBucket"]!;
-        string? mpfRawData = await s3Service.DownloadJsonAsync(mpfBucket, vestingTreasuryById.RootHash);
-        CreateTreasuryTrieRequest treasuryTrieRequest = JsonSerializer.Deserialize<CreateTreasuryTrieRequest>(mpfRawData!) ?? throw new Exception("Invalid MPF data");
-
-        // Fetch the proof and the original mpf data
-        Dictionary<string, string> mpfData = treasuryTrieRequest.Data.ToMpfRequest().Data;
-        byte[] claimRawKey = CborSerializer.Serialize(vestingClaimEntryByRootHash.ClaimEntry?.Claimant!);
-        string claimKey = Convert.ToHexString(claimRawKey).ToLowerInvariant();
-        string proofRaw = await mpfService.GetProofAsync(new(mpfData, claimKey));
-
-        // Create updated mpf trie
-        string originalRawClaimEntry = mpfData[claimKey];
-        ClaimEntry claimEntry = CborSerializer.Deserialize<ClaimEntry>(Convert.FromHexString(originalRawClaimEntry))!;
-        ClaimEntry updatedClaimEntry = claimEntry with
-        {
-            DirectValue = new([]),
-            VestingValue = new([])
-        };
-        string updatedRawClaimEntry = Convert.ToHexString(CborSerializer.Serialize(updatedClaimEntry));
-        mpfData[claimKey] = updatedRawClaimEntry;
-
-        // @TODO: Remove this
-        treasuryTrieRequest.Data.ClaimEntries[ownerAddr.ToString()] = treasuryTrieRequest.Data.ClaimEntries[ownerAddr.ToString()] with
-        {
-            DirectValue = new(),
-            VestingValue = new()
-        };
-
-        CreateTreasuryTrieRequest updatedreasuryTrieRequest = treasuryTrieRequest with
-        {
-            Data = treasuryTrieRequest.Data
-        };
-
-        string updatedRootHash = await treasuryHandler.ExecuteCreateTrieAsync(updatedreasuryTrieRequest);
+        // Claim
+        ClaimEntry claimEntry = CborSerializer.Deserialize<ClaimEntry>(Convert.FromHexString(request.RawClaimEntry))!;
 
         Treasury updatedDatum = datum with
         {
-            TreasuryRootHash = new(Convert.FromHexString(updatedRootHash))
+            TreasuryRootHash = new(Convert.FromHexString(request.UpdatedRootHash))
         };
         TreasuryClaimRedeemer redeemer = new(
-            CborSerializer.Deserialize<Proof>(Convert.FromHexString(proofRaw))!,
+            CborSerializer.Deserialize<Proof>(Convert.FromHexString(request.RawProof))!,
             claimEntry
         );
 
@@ -412,11 +371,6 @@ public class TransactionHandler(
             Output = lockedTreasuryOutput
         };
 
-        // There could be up to 3 outputs: direct claim, vested claim and output returned back to treasury
-        // Initially it would be 2 outputs only: direct claim and returned back to treasury
-        // But it is possible that there would only be one output, and that is when there's no more assets left in the treasury?
-        // @TODO: Handle all scenarios
-
         // Build the direct claim output
         Dictionary<string, Dictionary<string, ulong>> directValue = claimEntry.DirectValue.ToDictionary();
         ulong directCoin = 0;
@@ -454,7 +408,6 @@ public class TransactionHandler(
         {
             if (vestingLovelace.TryGetValue(string.Empty, out var vestingLovelaceValue))
             {
-                // Safely assign the value to directCoin
                 vestingCoin = vestingLovelaceValue;
             }
 
@@ -578,10 +531,10 @@ public class TransactionHandler(
     {
         NetworkType network = NetworkUtils.GetNetworkType(configuration);
         ulong currentSlot = (ulong)SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
-        
+
         using CoinectaDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         string txId = await txSubmitService.SubmitTxAsync(request.TxRaw);
-    
+
         dbContext.VestingTreasurySubmittedTxs.Add(new()
         {
             Id = request.Id,

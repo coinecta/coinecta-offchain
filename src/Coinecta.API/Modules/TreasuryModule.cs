@@ -26,5 +26,10 @@ public class TreasuryModule(TreasuryHandler treasuryHandlerV1) : CarterModule
             .MapToApiVersion(1)
             .WithName("CreateTreasuryTrie")
             .WithDescription("Create a treasury trie from a dictionary of claim entries");
+
+        group.MapPut("/claim", treasuryHandlerV1.PrepareClaimDataAsync)
+            .MapToApiVersion(1)
+            .WithName("FetchClaimData")
+            .WithDescription("Fetch updated claim data and update mpf records");
     }
 }
