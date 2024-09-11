@@ -56,7 +56,7 @@ public class CoinectaDbContext : CardanoDbContext
 
         modelBuilder.Entity<VestingTreasurySubmittedTx>(entity =>
         {
-            entity.HasKey(e => e.Id);
+            entity.HasKey(e => new { e.Id, e.TxHash, e.TxIndex });
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.TxHash).IsRequired();
             entity.Property(e => e.TxIndex).IsRequired();

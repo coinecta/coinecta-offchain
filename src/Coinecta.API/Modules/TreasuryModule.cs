@@ -31,5 +31,10 @@ public class TreasuryModule(TreasuryHandler treasuryHandlerV1) : CarterModule
             .MapToApiVersion(1)
             .WithName("FetchClaimData")
             .WithDescription("Fetch updated claim data and update mpf records");
+
+        group.MapGet("/roothash/latest", treasuryHandlerV1.FetchLatestTreasuryRootHashByIdAsync)
+            .MapToApiVersion(1)
+            .WithName("FetchLatestTreasuryRootHashById")
+            .WithDescription("Fetch the latest pending or confirmed root hash of a treasury");
     }
 }

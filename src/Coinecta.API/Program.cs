@@ -54,6 +54,14 @@ builder.Services.AddHttpClient("MpfClient", client =>
 builder.Services.AddHttpClient("SubmitTxClient", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["SubmitTxUrl"]!);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    HttpClientHandler handler = new()
+    {
+        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+    return handler;
 });
 
 var app = builder.Build();

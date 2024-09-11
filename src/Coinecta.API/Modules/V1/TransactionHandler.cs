@@ -41,6 +41,8 @@ public class TransactionHandler(
     TxSubmitService txSubmitService
 )
 {
+    private readonly int _mempoolConfirmationCount = configuration.GetValue("MempoolConfirmationCount", 30);
+
     public string Finalize(FinalizeTransactionRequest request)
     {
         Transaction tx = Convert.FromHexString(request.UnsignedTxCbor).DeserializeTransaction();
@@ -142,13 +144,23 @@ public class TransactionHandler(
     public async Task<string> TreasuryWithdrawAsync(TreasuryWithdrawRequest request)
     {
         // Prepare needed data
+        NetworkType network = NetworkUtils.GetNetworkType(configuration);
+        ulong currentSlot = (ulong)SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
+
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
         VestingTreasuryById? vestingTreasuryById = request switch
         {
-            { Id: not null } => await dbContext.VestingTreasuryById.FetchId(request.Id),
-            { SpendOutRef: not null } => await dbContext.VestingTreasuryById.FetchOutref(request.SpendOutRef),
+            { Id: not null } => await dbContext.VestingTreasuryById.FetchIdAsync(request.Id),
+            { SpendOutRef: not null } => await dbContext.VestingTreasuryById.FetchOutrefAsync(request.SpendOutRef),
             _ => null
         } ?? throw new Exception("Treasury not found");
+
+        // Fetch latest pending state from mempool if any, otherwise use the confirmed utxo
+        vestingTreasuryById = await dbContext.VestingTreasurySubmittedTxs.FetchConfirmedOrPendingVestingTreasuryAsync(
+            vestingTreasuryById,
+            currentSlot,
+            _mempoolConfirmationCount
+        );
 
         Treasury datum = vestingTreasuryById.TreasuryDatum!;
 
@@ -169,7 +181,6 @@ public class TransactionHandler(
 
         // Reference Inputs
         TransactionInput treasuryValidatorReferenceInput = CoinectaUtils.GetTreasuryReferenceInput(configuration);
-
 
         // in the meantime, we temporarily pass the datum in the request body
         byte[] treasuryOwnerPkh = datum.Owner switch
@@ -272,8 +283,6 @@ public class TransactionHandler(
         txBodyBuilder.AddRequiredSigner(treasuryOwnerPkh);
 
         // Validity Interval
-        NetworkType network = NetworkUtils.GetNetworkType(configuration);
-        long currentSlot = SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
         txBodyBuilder.SetValidAfter((uint)currentSlot - 100);
         txBodyBuilder.SetValidBefore((uint)(currentSlot + 1000));
 
@@ -308,12 +317,14 @@ public class TransactionHandler(
 
         // Fetch treasury from the database
         using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
-        VestingTreasuryById? vestingTreasuryById = request switch
+        VestingTreasuryById vestingTreasuryById = request switch
         {
-            { Id: not null } => await dbContext.VestingTreasuryById.FetchId(request.Id),
-            { SpendOutRef: not null } => await dbContext.VestingTreasuryById.FetchOutref(request.SpendOutRef),
+            { Id: not null } => await dbContext.VestingTreasuryById.FetchIdAsync(request.Id),
+            { SpendOutRef: not null } => await dbContext.VestingTreasuryById.FetchOutrefAsync(request.SpendOutRef),
             _ => null
         } ?? throw new Exception("Treasury not found");
+
+        vestingTreasuryById = await dbContext.VestingTreasurySubmittedTxs.FetchConfirmedOrPendingVestingTreasuryAsync(vestingTreasuryById);
 
         // Extract needed data from treasury datum
         Treasury datum = vestingTreasuryById.TreasuryDatum!;

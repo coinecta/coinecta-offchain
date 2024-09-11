@@ -72,6 +72,21 @@ public class TreasuryHandler(
         return Results.Ok(new ClaimDataResponse(updatedRootHash, proofRaw, originalRawClaimEntry));
     }
 
+    public async Task<IResult> FetchLatestTreasuryRootHashByIdAsync(string id)
+    {
+        using CoinectaDbContext dbContext = dbContextFactory.CreateDbContext();
+
+        // Fetch confirmed treasury state
+        VestingTreasuryById? vestingTreasuryById = await dbContext.VestingTreasuryById.FetchIdAsync(id);
+
+        if (vestingTreasuryById is null) return Results.NotFound();
+
+        // Fetch pending treasury state if any
+        VestingTreasuryById latestVestingTreasuryById = await dbContext.VestingTreasurySubmittedTxs.FetchConfirmedOrPendingVestingTreasuryAsync(vestingTreasuryById);
+
+        return Results.Ok(latestVestingTreasuryById.RootHash);
+    }
+
     public async Task<string> ExecuteCreateTrieAsync(CreateTreasuryTrieRequest request)
     {
         // Get the trie root hash using MPF api
