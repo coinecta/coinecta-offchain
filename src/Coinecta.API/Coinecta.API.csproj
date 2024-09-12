@@ -12,6 +12,7 @@
     <PackageReference Include="Carter" Version="8.2.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.1" />
+    <PackageReference Include="SAIB.CardanoSharp.Wallet" Version="7.3.4" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Cardano.Sync.Data.Models.Datums;
+using CardanoSharp.Wallet.Enums;
 using CardanoSharp.Wallet.Extensions.Models;
-using Chrysalis.Cardano.Models.Coinecta.Vesting;
+using CardanoSharp.Wallet.Utilities;
 using Chrysalis.Cardano.Models.Sundae;
 using Chrysalis.Cbor;
 using Coinecta.Data.Extensions;
@@ -10,6 +10,7 @@ using Coinecta.Data.Models.Api.Request;
 using Coinecta.Data.Models.Api.Response;
 using Coinecta.Data.Models.Entity;
 using Coinecta.Data.Services;
+using Coinecta.Data.Utils;
 using Microsoft.EntityFrameworkCore;
 using CAddress = CardanoSharp.Wallet.Models.Addresses.Address;
 using ClaimEntry = Chrysalis.Cardano.Models.Coinecta.Vesting.ClaimEntry;
@@ -23,6 +24,7 @@ public class TreasuryHandler(
     S3Service s3Service
 )
 {
+    private NetworkType Network => NetworkUtils.GetNetworkType(configuration);
     public async Task<IResult> CreateTrieAsync(CreateTreasuryTrieRequest request)
     {
         string rootHash = await ExecuteCreateTrieAsync(request);
@@ -82,7 +84,10 @@ public class TreasuryHandler(
         if (vestingTreasuryById is null) return Results.NotFound();
 
         // Fetch pending treasury state if any
-        VestingTreasuryById latestVestingTreasuryById = await dbContext.VestingTreasurySubmittedTxs.FetchConfirmedOrPendingVestingTreasuryAsync(vestingTreasuryById);
+        ulong currentSlot = (ulong)SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(Network), DateTime.UtcNow);
+        VestingTreasuryById latestVestingTreasuryById = 
+            await dbContext.VestingTreasurySubmittedTxs
+                .FetchConfirmedOrPendingVestingTreasuryAsync(vestingTreasuryById, currentSlot, 3);
 
         return Results.Ok(latestVestingTreasuryById.RootHash);
     }

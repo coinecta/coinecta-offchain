@@ -42,6 +42,7 @@ public class TransactionHandler(
 )
 {
     private readonly int _mempoolConfirmationCount = configuration.GetValue("MempoolConfirmationCount", 30);
+    private NetworkType Network => NetworkUtils.GetNetworkType(configuration);
 
     public string Finalize(FinalizeTransactionRequest request)
     {
@@ -324,7 +325,10 @@ public class TransactionHandler(
             _ => null
         } ?? throw new Exception("Treasury not found");
 
-        vestingTreasuryById = await dbContext.VestingTreasurySubmittedTxs.FetchConfirmedOrPendingVestingTreasuryAsync(vestingTreasuryById);
+        ulong currentSlot = (ulong)SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(Network), DateTime.UtcNow);
+        vestingTreasuryById = 
+            await dbContext.VestingTreasurySubmittedTxs
+                .FetchConfirmedOrPendingVestingTreasuryAsync(vestingTreasuryById, currentSlot, 3);
 
         // Extract needed data from treasury datum
         Treasury datum = vestingTreasuryById.TreasuryDatum!;
@@ -488,7 +492,7 @@ public class TransactionHandler(
 
         // Validity Interval
         NetworkType network = NetworkUtils.GetNetworkType(configuration);
-        long currentSlot = SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
+        currentSlot = (ulong)SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(network), DateTime.UtcNow);
         txBodyBuilder.SetValidAfter((uint)currentSlot - 100);
         txBodyBuilder.SetValidBefore((uint)(currentSlot + 1000));
 

@@ -19,7 +19,7 @@ public static class VestingTreasurySubmittedTxExtension
 
         if (pending is not null && pending.Slot > confirmed.Slot)
         {
-            ulong expiration = 20 * confirmationCount;
+            ulong expiration = 20 * (ulong)confirmationCount;
             ulong slotElapsed = currentSlot - pending.Slot;
 
             // Check if latest mempool entry is already expired
