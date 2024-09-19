@@ -1,7 +1,6 @@
 using CardanoSharp.Wallet.Extensions.Models;
 using Chrysalis.Cardano.Models.Cbor;
-using Chrysalis.Cardano.Models.Coinecta.Vesting;
-using Chrysalis.Cardano.Models.Core;
+using Chrysalis.Cardano.Models.Core.Transaction;
 using Chrysalis.Cardano.Models.Sundae;
 using Chrysalis.Cbor;
 using Coinecta.Data.Models;

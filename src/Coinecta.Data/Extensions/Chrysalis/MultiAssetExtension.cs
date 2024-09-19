@@ -1,4 +1,4 @@
-using Chrysalis.Cardano.Models.Core;
+using Chrysalis.Cardano.Models.Core.Transaction;
 
 namespace Coinecta.Data.Extensions.Chrysalis;
 

@@ -8,9 +8,9 @@
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" Version="3.7.402.6" />
-    <PackageReference Include="Chrysalis" Version="0.1.5" />
+    <PackageReference Include="Chrysalis" Version="0.2.1" />
     <PackageReference Include="SAIB.Cardano.Sync" Version="0.2.36-alpha" />
-    <PackageReference Include="SAIB.CardanoSharp.Wallet" Version="7.3.4" />
+    <PackageReference Include="SAIB.CardanoSharp.Wallet" Version="7.3.6" />
   </ItemGroup>
 
 </Project>

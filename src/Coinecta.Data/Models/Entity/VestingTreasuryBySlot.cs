@@ -1,8 +1,8 @@
 using Chrysalis.Cardano.Models.Coinecta.Vesting;
-using Chrysalis.Cardano.Models.Core;
+using Chrysalis.Cardano.Models.Core.Transaction;
 using Chrysalis.Cbor;
 using Coinecta.Data.Models.Enums;
-using TransactionOutput = Chrysalis.Cardano.Models.Core.TransactionOutput;
+using TransactionOutput = Chrysalis.Cardano.Models.Core.Transaction.TransactionOutput;
 
 namespace Coinecta.Data.Models.Entity;
 

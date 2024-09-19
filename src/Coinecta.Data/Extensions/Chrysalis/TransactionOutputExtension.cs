@@ -3,6 +3,7 @@ using CSyncTransactionOutput = Cardano.Sync.Data.Models.TransactionOutput;
 using CWalletAddress = CardanoSharp.Wallet.Models.Addresses.Address;
 using CSyncDatum = Cardano.Sync.Data.Models.Datum;
 using CSyncDatumType = Cardano.Sync.Data.Models.DatumType;
+using Chrysalis.Cardano.Models.Core.Transaction;
 
 namespace Coinecta.Data.Extensions.Chrysalis;
 

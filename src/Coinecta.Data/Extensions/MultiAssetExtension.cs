@@ -1,6 +1,6 @@
 using CardanoSharp.Wallet.Models.Transactions;
 using Chrysalis.Cardano.Models.Cbor;
-using Chrysalis.Cardano.Models.Core;
+using Chrysalis.Cardano.Models.Core.Transaction;
 
 namespace Coinecta.Data.Extensions;
 
