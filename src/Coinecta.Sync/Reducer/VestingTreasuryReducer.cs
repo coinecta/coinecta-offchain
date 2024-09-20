@@ -83,7 +83,20 @@ public class VestingTreasuryReducer(
 
         // Get all input outrefs
         List<((string TxHash, ulong TxIndex) Id, Redeemer? Redeemer)> inputsTuple = response.Block.TransactionBodies
-            .SelectMany(tx => tx.Inputs, (tx, input) => ((input.Id.ToHex(), input.Index), tx.Redeemers?.ToList().Find(r => r.Index == input.Index)))
+            .SelectMany(
+                tx => tx.Inputs,
+                (tx, input) =>
+                    (
+                        (input.Id.ToHex(), input.Index),
+                        tx.Redeemers?.ToList()
+                            .Find(r =>
+                                r.Index == tx.Inputs
+                                    .OrderBy(i => i.Id.ToHex() + i.Index)
+                                    .ToList()
+                                    .FindIndex(i => i.Id.ToHex() == input.Id.ToHex() && i.Index == input.Index)
+                            )
+                    )
+            )
             .ToList();
 
         IEnumerable<string> inputOutRefs = inputsTuple.Select(inputTuple => inputTuple.Id.TxHash + inputTuple.Id.TxIndex);
