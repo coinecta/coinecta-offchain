@@ -17,7 +17,8 @@ public static class TreasuryTrieDataExtension
     {
         CborBytes vestingProgram = new(Convert.FromHexString(self.VestingProgramScriptHash));
         CborBytes vestingParams = new(Convert.FromHexString(self.VestingParameters));
-        Dictionary<string, string> claimEntries = self.ClaimEntries.ToDictionary(
+        IEnumerable<string> sortedKeys = self.ClaimEntries.Keys.OrderBy(k => k);
+        Dictionary<string, string> claimEntries = self.ClaimEntries.OrderBy(kvp => kvp.Key).ToDictionary(
             kvp =>
             {
                 CAddress claimantAddress = new(kvp.Key);
