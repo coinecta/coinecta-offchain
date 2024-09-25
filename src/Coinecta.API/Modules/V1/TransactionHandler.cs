@@ -326,7 +326,7 @@ public class TransactionHandler(
         } ?? throw new Exception("Treasury not found");
 
         ulong currentSlot = (ulong)SlotUtility.GetSlotFromUTCTime(SlotUtility.GetSlotNetworkConfig(Network), DateTime.UtcNow);
-        vestingTreasuryById = 
+        vestingTreasuryById =
             await dbContext.VestingTreasurySubmittedTxs
                 .FetchConfirmedOrPendingVestingTreasuryAsync(vestingTreasuryById, currentSlot, 3);
 
@@ -357,6 +357,15 @@ public class TransactionHandler(
         INativeScriptBuilder treasuryIdMintingScript = CoinectaUtils.GetTreasuryIdMintingScriptBuilder(configuration);
         byte[] treasuryIdMintingPolicyBytes = treasuryIdMintingScript.Build().GetPolicyId();
         string treasuryIdMintingPolicy = Convert.ToHexString(treasuryIdMintingPolicyBytes).ToLowerInvariant();
+
+        Utxo treasuryUtxo = TransactionUtils.UtxoFrom(
+            new()
+            {
+                TransactionId = Convert.FromHexString(vestingTreasuryById.TxHash),
+                TransactionIndex = vestingTreasuryById.TxIndex
+            },
+            TransactionUtils.DeserializeTxOutput(Convert.ToHexString(vestingTreasuryById.UtxoRaw))
+        );
 
         CSyncTransactionOutput utxo = vestingTreasuryById.Utxo!.ToCardanoSync();
         Value? lockedValue = utxo.Amount;
@@ -453,13 +462,13 @@ public class TransactionHandler(
 
         // Build Transaction Body
         ITransactionBodyBuilder txBodyBuilder = TransactionBodyBuilder.Create;
-        // Inputs
-        txBodyBuilder.AddInput(lockedTreasuryInput);
 
         // Add return output if any
+        IEnumerable<TransactionOutput> finalOutputs = [];
         if (treasuryReturnOutputValue.Coin > 0)
         {
             txBodyBuilder.AddOutput(treasuryReturnOutput);
+            finalOutputs = [.. finalOutputs, treasuryReturnOutput];
         }
         else
         {
@@ -478,7 +487,25 @@ public class TransactionHandler(
 
         // Add change output
         if (directClaimOutput is not null)
+        {
+            finalOutputs = [.. finalOutputs, directClaimOutput];
             txBodyBuilder.AddOutput(directClaimOutput);
+        }
+
+        // Run Coin Selection
+        CoinSelection changeOutputCoinSelection = TransactionUtils.GetCoinSelection(
+            finalOutputs,
+            utxos,
+            ownerAddr.ToString(),
+            null,
+            [treasuryUtxo]
+        );
+
+        // Add inputs
+        changeOutputCoinSelection.Inputs.ForEach(input => txBodyBuilder.AddInput(input));
+
+        // Add change outputs
+        changeOutputCoinSelection.ChangeOutputs.ForEach(output => txBodyBuilder.AddOutput(output));
 
         // Reference Script Inputs
         txBodyBuilder.AddReferenceInput(treasuryValidatorReferenceInput);
@@ -532,7 +559,9 @@ public class TransactionHandler(
         {
             Transaction tx = txBuilder.BuildAndSetExUnits(network);
             uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
-            tx.TransactionBody.TransactionOutputs.Last().Value.Coin -= fee;
+            tx.TransactionBody.TransactionOutputs
+                .Where(o => o.DatumOption is null)
+                .MaxBy(output => output.Value.Coin)!.Value.Coin -= fee;
 
             return new(Convert.ToHexString(tx.Serialize()), treasuryOutputRaw);
         }

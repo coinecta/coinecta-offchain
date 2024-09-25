@@ -1,12 +1,15 @@
 using CardanoSharp.Wallet.CIPs.CIP2;
 using CardanoSharp.Wallet.CIPs.CIP2.ChangeCreationStrategies;
 using CardanoSharp.Wallet.CIPs.CIP2.Models;
+using CardanoSharp.Wallet.Extensions;
 using CardanoSharp.Wallet.Extensions.Models;
 using CardanoSharp.Wallet.Extensions.Models.Transactions;
 using CardanoSharp.Wallet.Extensions.Models.Transactions.TransactionWitnesses;
 using CardanoSharp.Wallet.Models;
+using CardanoSharp.Wallet.Models.Addresses;
 using CardanoSharp.Wallet.Models.Transactions;
 using CardanoSharp.Wallet.Models.Transactions.TransactionWitness;
+using CardanoSharp.Wallet.Models.Transactions.TransactionWitness.PlutusScripts;
 using CardanoSharp.Wallet.TransactionBuilding;
 using PeterO.Cbor2;
 
@@ -74,5 +77,39 @@ public static class TransactionUtils
     {
         CBORObject txOutputCborObj = CBORObject.DecodeFromBytes(Convert.FromHexString(txOutputCbor));
         return txOutputCborObj.GetTransactionOutput();
+    }
+
+    public static Utxo UtxoFrom(TransactionInput input, TransactionOutput output)
+    {
+        Utxo utxo = new()
+        {
+            Balance = new Balance(),
+            TxHash = input.TransactionId.ToStringHex(),
+            TxIndex = input.TransactionIndex,
+            OutputAddress = new Address(output.Address).ToString(),
+            OutputDatumOption = new DatumOption()
+            {
+                RawData = output.DatumOption?.RawData
+            }
+        };
+        utxo.Balance.Lovelaces = output.Value.Coin;
+        if (output.Value.MultiAsset != null && output.Value.MultiAsset.Count > 0)
+        {
+            utxo.Balance.Assets = output.Value.MultiAsset
+                .SelectMany(
+                    x =>
+                        x.Value.Token.Select(
+                            y =>
+                                new Asset()
+                                {
+                                    PolicyId = x.Key.ToStringHex(),
+                                    Name = y.Key.ToStringHex(),
+                                    Quantity = y.Value
+                                }
+                        )
+                )
+                .ToList();
+        }
+        return utxo;
     }
 }
