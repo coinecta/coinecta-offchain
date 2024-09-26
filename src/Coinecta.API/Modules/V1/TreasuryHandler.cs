@@ -178,15 +178,13 @@ public class TreasuryHandler(
             IEnumerable<Task> mpfUploads = unlistedRootHashes.Select(async rootHash => {
                 string? mpfRawData = await s3Service.DownloadJsonAsync(mpfBucket, rootHash);
                 
-                if (mpfRawData == null)
+                if (mpfRawData != null)
                 {
-                    throw new Exception($"No data found for root hash: {rootHash}");
+                    CreateTreasuryTrieRequest treasuryTrieRequest = JsonSerializer.Deserialize<CreateTreasuryTrieRequest>(mpfRawData!) 
+                        ?? throw new Exception("Invalid MPF data");
+
+                    string result = await ExecuteCreateTrieAsync(treasuryTrieRequest);
                 }
-
-                CreateTreasuryTrieRequest treasuryTrieRequest = JsonSerializer.Deserialize<CreateTreasuryTrieRequest>(mpfRawData!) 
-                    ?? throw new Exception("Invalid MPF data");
-
-                string result = await ExecuteCreateTrieAsync(treasuryTrieRequest);
             });
 
             await Task.WhenAll(mpfUploads);
