@@ -2,6 +2,7 @@ using Cardano.Sync;
 using Cardano.Sync.Reducers;
 using Coinecta.Data.Models;
 using Coinecta.Sync.Reducer;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,5 +24,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 } 
 
+using var scope = app.Services.CreateScope();
+var services = scope.ServiceProvider;
+var context = services.GetRequiredService<CoinectaDbContext>();
+if (context.Database.GetPendingMigrations().Any())
+    context.Database.Migrate();
 
 app.Run();
