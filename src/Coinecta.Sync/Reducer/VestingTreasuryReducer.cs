@@ -63,6 +63,7 @@ public class VestingTreasuryReducer(
             TxHash = vtbs.TxHash,
             TxIndex = vtbs.TxIndex,
             UtxoRaw = vtbs.UtxoRaw,
+            RootHash = vtbs.RootHash,
             OwnerPkh = vtbs.OwnerPkh
         });
 
