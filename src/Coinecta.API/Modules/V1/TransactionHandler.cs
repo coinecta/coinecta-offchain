@@ -549,6 +549,7 @@ public class TransactionHandler(
 
         // Required Signers
         txBodyBuilder.AddRequiredSigner(ownerAddr.GetPublicKeyHash());
+        txBodyBuilder.AddRequiredSigner(ownerAddr.GetStakeAddress().GetPublicKeyHash());
 
         // Build Transaction
         ITransactionBuilder txBuilder = TransactionBuilder.Create;
@@ -558,7 +559,7 @@ public class TransactionHandler(
         try
         {
             Transaction tx = txBuilder.BuildAndSetExUnits(network);
-            uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 1);
+            uint fee = tx.CalculateAndSetFee(numberOfVKeyWitnessesToMock: 2);
             tx.TransactionBody.TransactionOutputs
                 .Where(o => o.DatumOption is null)
                 .MaxBy(output => output.Value.Coin)!.Value.Coin -= fee;
