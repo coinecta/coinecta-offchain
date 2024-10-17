@@ -41,5 +41,15 @@ public class TreasuryModule(TreasuryHandler treasuryHandlerV1) : CarterModule
             .MapToApiVersion(1)
             .WithName("FetchClaimEntriesByAddresses")
             .WithDescription("Fetch the latest claim entries of a list of address");
+
+        group.MapPost("trie/convert/csv", treasuryHandlerV1.ConvertCsvToTreasuryTrieDataAsync)
+            .MapToApiVersion(1)
+            .WithName("ConvertCsvToTreasuryTrieData")
+            .WithDescription("Convert a csv to treasury trie data");
+
+        group.MapPost("trie/create/csv", treasuryHandlerV1.CreateTrieFromCsvAsync)
+            .MapToApiVersion(1)
+            .WithName("CreateTrieFromCsv")
+            .WithDescription("Create a treasury trie from a csv file");
     }
 }

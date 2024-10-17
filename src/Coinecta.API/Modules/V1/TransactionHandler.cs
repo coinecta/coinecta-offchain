@@ -32,6 +32,7 @@ using Coinecta.Data.Models.Api.Request;
 using ClaimEntry = Chrysalis.Cardano.Models.Coinecta.Vesting.ClaimEntry;
 using Chrysalis.Cardano.Models.Mpf;
 using Coinecta.Data.Models.Api.Response;
+using Value = Cardano.Sync.Data.Models.Value;
 
 namespace Coinecta.API.Modules.V1;
 

@@ -17,6 +17,7 @@ using Coinecta.Data.Utils;
 using Microsoft.EntityFrameworkCore;
 using CAddress = CardanoSharp.Wallet.Models.Addresses.Address;
 using ClaimEntry = Chrysalis.Cardano.Models.Coinecta.Vesting.ClaimEntry;
+using CoinectaClaimEntry = Coinecta.Data.Models.ClaimEntry;
 using Signature = Chrysalis.Cardano.Models.Sundae.Signature;
 namespace Coinecta.API.Modules.V1;
 
@@ -37,7 +38,7 @@ public class TreasuryHandler(
     public async Task<IResult> PrepareClaimDataAsync(string rootHash, string ownerAddress)
     {
         CAddress ownerAddr = new(ownerAddress);
-
+    
         // If claim entry exists, get latest mpf data, proof and updated roothash
         string mpfBucket = configuration["MpfBucket"]!;
         string? mpfRawData = await s3Service.DownloadJsonAsync(mpfBucket, rootHash);
@@ -194,9 +195,17 @@ public class TreasuryHandler(
             .Select(cAddress => Convert.ToHexString(cAddress))
             .ToList();
 
+        List<string> stakeHashes = addresses.Select(address => new CAddress(address).GetStakeKeyHash())
+            .Select(cAddress => Convert.ToHexString(cAddress))
+            .ToList();
+
         Expression<Func<VestingClaimEntryByRootHash, bool>> claimantPkhPredicate = PredicateBuilder.False<VestingClaimEntryByRootHash>();
 
         pkHashes.ForEach(pkHash =>
+            claimantPkhPredicate = claimantPkhPredicate.Or(vtrh => vtrh.ClaimantPkh == pkHash.ToLower())
+        );
+
+        stakeHashes.ForEach(pkHash =>
             claimantPkhPredicate = claimantPkhPredicate.Or(vtrh => vtrh.ClaimantPkh == pkHash.ToLower())
         );
 
@@ -226,5 +235,117 @@ public class TreasuryHandler(
             .ToList();
 
         return claimEntries;
+    }
+
+    public async Task<TreasuryTrieData?> ConvertCsvToTreasuryTrieDataAsync(HttpRequest request)
+    {   
+        if (!request.HasFormContentType) return null;
+
+        IFormCollection form = await request.ReadFormAsync();
+        IFormFile? file = form.Files.FirstOrDefault();
+        
+        if (file == null || file.Length == 0) return null;
+
+        StreamReader reader = new StreamReader(file.OpenReadStream());
+        string csvData = await reader.ReadToEndAsync();
+
+        string[] lines = csvData.Split(['\n', '\r'])[1..];
+
+        if (lines.Length == 0) return null;
+
+        Dictionary<string, CoinectaClaimEntry> claimEntries = [];
+
+        foreach (string line in lines)
+        {
+            string[] fields = line.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+            if (fields.Length == 0) continue;
+
+            string stakeAddress = fields.First();
+
+            if (!ulong.TryParse(fields[1..].First(), out ulong lovelace)) continue;
+
+            Dictionary<string, Dictionary<string, ulong>> multiAsset = [];
+
+            string policyId = "";
+            string assetName = "";
+            bool isInAmountField = false;
+            
+            foreach (string field in fields[2..])
+            {
+                if (!isInAmountField)
+                {
+                    policyId = field[..56];
+                    assetName = field[56..];
+
+                    isInAmountField = true;
+                    continue;
+                }
+
+                if (!double.TryParse(field, out double amount)) continue;
+
+                ulong actualAmount = (ulong)RemoveDecimalPoint(amount);
+
+                multiAsset.Add(policyId, new()
+                {
+                    {assetName, actualAmount}
+                });
+
+                isInAmountField = false;
+            }
+
+            Value directValue = new()
+            {
+                Coin = lovelace,
+                MultiAsset = multiAsset
+            };
+
+            CoinectaClaimEntry claimEntry = new
+            (
+                VestingValue: default,
+                DirectValue: directValue,
+                VestingProgramScriptHash: default,
+                VestingParameters: default
+            );
+
+            claimEntries.Add(stakeAddress, claimEntry);
+        }
+
+        if (claimEntries.Count() == 0) return null;
+
+        TreasuryTrieData treasuryTrieData = new
+        (
+            ClaimEntries: claimEntries,
+            VestingProgramScriptHash: "00",
+            VestingParameters: "00"
+        );
+
+        return treasuryTrieData;
+    }
+
+    public async Task<IResult> CreateTrieFromCsvAsync(HttpRequest request)
+    {
+        TreasuryTrieData? treasuryTrieData = await ConvertCsvToTreasuryTrieDataAsync(request);
+
+        if (treasuryTrieData is null)
+        {
+            return Results.BadRequest("Failed to convert csv to treasury trie data");
+        }
+
+        CreateTreasuryTrieRequest treasuryTrieRequest = new(treasuryTrieData);
+        IResult result = await CreateTrieAsync(treasuryTrieRequest);
+
+        return result;
+    }
+
+    private double RemoveDecimalPoint(double value)
+    {
+        string valueString = value.ToString();
+        
+        if (!valueString.Contains('.')) return value;
+
+        string cleanedValueString = valueString.Replace(".", "");
+        
+        return double.Parse(cleanedValueString);
     }
 }

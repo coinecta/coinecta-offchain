@@ -1,5 +1,5 @@
 using Chrysalis.Cardano.Models.Core.Transaction;
-using Value = Cardano.Sync.Data.Models.Value;
+using Coinecta.Data.Models;
 
 namespace Coinecta.Data.Extensions;
 
